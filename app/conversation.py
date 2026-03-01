@@ -43,7 +43,8 @@ async def process_conversation(phone: str, message: str):
             "phone": phone,
             "state": session['state'],
             "flow_type": "whatsapp_chat"
-        }
+        },
+        cache_enabled=True
     )
 
     # 5. Chunk and send response

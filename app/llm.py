@@ -25,9 +25,10 @@ class LLMClient:
         session_path: Optional[str] = None,
         session_name: Optional[str] = None,
         user_id: Optional[str] = None,
-        properties: Optional[Dict[str, str]] = None
+        properties: Optional[Dict[str, str]] = None,
+        cache_enabled: bool = False
     ) -> str:
-        """Calls OpenRouter API with fallback logic and Helicone metrics."""
+        """Calls OpenRouter API with fallback logic and Helicone metrics/caching."""
         model = model or settings.OPENROUTER_PRIMARY_MODEL
         
         headers = self.headers.copy()
@@ -43,6 +44,9 @@ class LLMClient:
             if properties:
                 for key, value in properties.items():
                     headers[f"Helicone-Property-{key}"] = str(value)
+            if cache_enabled:
+                headers["Helicone-Cache-Enabled"] = "true"
+                headers["Cache-Control"] = "max-age=3600"
 
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
@@ -67,7 +71,8 @@ class LLMClient:
                         session_path=session_path,
                         session_name=session_name,
                         user_id=user_id,
-                        properties=properties
+                        properties=properties,
+                        cache_enabled=cache_enabled
                     )
                 raise e
 
