@@ -24,7 +24,11 @@ async def extract_bant(phone: str, history: List[Dict[str, str]]):
             session_id=phone,
             session_path="/background/bant",
             session_name=f"BANT Extraction - {phone}",
-            user_id=phone
+            user_id=phone,
+            properties={
+                "phone": phone,
+                "task_type": "bant_extraction"
+            }
         )
         # Clean response text in case LLM added markdown backticks
         response_text = response_text.replace("```json", "").replace("```", "").strip()

@@ -24,9 +24,10 @@ class LLMClient:
         session_id: Optional[str] = None,
         session_path: Optional[str] = None,
         session_name: Optional[str] = None,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        properties: Optional[Dict[str, str]] = None
     ) -> str:
-        """Calls OpenRouter API with fallback logic and Helicone sessions/users."""
+        """Calls OpenRouter API with fallback logic and Helicone metrics."""
         model = model or settings.OPENROUTER_PRIMARY_MODEL
         
         headers = self.headers.copy()
@@ -39,6 +40,9 @@ class LLMClient:
                 headers["Helicone-Session-Name"] = session_name
             if user_id:
                 headers["Helicone-User-Id"] = user_id
+            if properties:
+                for key, value in properties.items():
+                    headers[f"Helicone-Property-{key}"] = str(value)
 
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
@@ -62,7 +66,8 @@ class LLMClient:
                         session_id=session_id,
                         session_path=session_path,
                         session_name=session_name,
-                        user_id=user_id
+                        user_id=user_id,
+                        properties=properties
                     )
                 raise e
 

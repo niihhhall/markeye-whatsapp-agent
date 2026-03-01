@@ -38,7 +38,12 @@ async def process_conversation(phone: str, message: str):
         session_id=phone,
         session_path=f"/agent/{session['state']}",
         session_name=f"WhatsApp Chat - {phone}",
-        user_id=phone
+        user_id=phone,
+        properties={
+            "phone": phone,
+            "state": session['state'],
+            "flow_type": "whatsapp_chat"
+        }
     )
 
     # 5. Chunk and send response
