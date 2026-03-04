@@ -1,12 +1,14 @@
 from fastapi import FastAPI
 from app.webhook import router as webhook_router
 from app.outbound import router as outbound_router
+from app.calendly import router as calendly_router
 from app.config import settings
 
 app = FastAPI(title="After5 WhatsApp AI Agent", version="1.0.0")
 
 app.include_router(webhook_router)
 app.include_router(outbound_router)
+app.include_router(calendly_router)
 
 @app.get("/")
 async def health():
