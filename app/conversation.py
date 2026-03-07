@@ -11,7 +11,7 @@ from typing import Dict, Any
 
 async def process_conversation(phone: str, message: str, conversation_id: str = "", source: str = "text"):
     """Main conversation engine logic."""
-    # (typing indicator removed — was a no-op in Twilio; MessageBird equivalent not needed)
+    print(f"\n[Conversation] Processing {source} message from {phone}: '{message}'")
 
     # 2. Get session and lead data
     session = await redis_client.get_session(phone)
@@ -31,11 +31,13 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
     await supabase_client.log_message(phone, "inbound", message, session["state"], source=source)
 
     # 3.1 Show typing and thinking delay
+    print(f"[Conversation] Simulation: Human delay + Typing indicator for {phone}")
     await send_typing_indicator(phone)
     # Simulate thinking time (1.5s to 3s)
     await asyncio.sleep(2.0)
 
     # 4. Build context and call LLM
+    print(f"[Conversation] Calling LLM for {phone} using model: {settings.OPENROUTER_PRIMARY_MODEL}")
     messages = await llm_client.build_context(session, lead_data, message)
     response_text = await llm_client.call_llm(
         messages,
@@ -50,6 +52,7 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
         },
         cache_enabled=True
     )
+    print(f"[Conversation] AI Response for {phone}: '{response_text}'")
 
     # 5. Chunk and send response
     chunks = chunk_message(response_text)

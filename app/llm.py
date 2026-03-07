@@ -60,6 +60,7 @@ class LLMClient:
                     }
                 )
                 response.raise_for_status()
+                print(f"[LLM] Successfully called model: {model}")
                 data = response.json()
                 return data['choices'][0]['message']['content']
             except Exception as e:

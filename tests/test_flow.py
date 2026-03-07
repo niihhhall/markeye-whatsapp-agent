@@ -3,7 +3,7 @@ import asyncio
 import json
 
 # Replace with your local URL (e.g., http://localhost:8080) or Railway URL
-BASE_URL = "http://localhost:8000" 
+BASE_URL = "https://after5-agent-production.up.railway.app" 
 
 async def test_text_message(text: str):
     print(f"\n--- Testing Text Message: '{text}' ---")
@@ -55,18 +55,16 @@ async def test_voice_note(audio_url: str):
         print(f"Status: {response.status_code}")
         print(f"Response: {response.json()}")
 
-if __name__ == "__main__":
-    # To run this, make sure your app is running locally (uvicorn main:app --reload)
-    # Then run: python tests/test_flow.py
-    
+async def main():
     print("Albert Test Suite starting...")
-    loop = asyncio.get_event_loop()
     
     # 1. Test a simple text message
-    loop.run_until_complete(test_text_message("How can After5 help me with my business?"))
+    await test_text_message("How can After5 help me with my business?")
     
-    # 2. Test a voice note (using a sample publicly accessible audio if possible, or just checking if it triggers)
-    # NOTE: Transcription will only work if OPENAI_API_KEY is set in your .env
-    # loop.run_until_complete(test_voice_note("https://www.learningcontainer.com/wp-content/uploads/2020/02/Sample-OGG-File.ogg"))
+    # 2. Test a voice note (using a sample publicly accessible audio if possible)
+    # await test_voice_note("https://www.learningcontainer.com/wp-content/uploads/2020/02/Sample-OGG-File.ogg")
 
     print("\nTest finished. Now check your terminal/Railway logs for Albert's thinking process!")
+
+if __name__ == "__main__":
+    asyncio.run(main())
