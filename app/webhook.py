@@ -68,8 +68,9 @@ async def bird_webhook(request: Request, background_tasks: BackgroundTasks):
         logger.info("Ignoring non-inbound event: %s", event)
         return {"status": "ignored", "reason": f"event:{event}"}
 
-    # Bird Channels API: message is nested under "message" key
-    message = payload.get("message", payload)  # fallback to root if no "message" key
+    # Bird Channels API: message is nested under "payload" key
+    # Structure: {"service": "channels", "event": "whatsapp.inbound", "payload": {...}}
+    message = payload.get("payload", payload)  # fallback to root if no "payload" key
 
     message_id = message.get("id", "")
 
