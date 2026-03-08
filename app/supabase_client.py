@@ -25,10 +25,14 @@ class SupabaseClient:
 
     async def log_message(self, phone: str, direction: str, body: str, state: str, source: str = "text") -> Dict[str, Any]:
         """Inserts into messages table."""
+        # Fix: Resolve lead_id from phone and use 'content' column instead of 'body'
+        lead = await self.get_lead_by_phone(phone)
+        lead_id = lead.get("id") if lead else None
+
         data, count = self.client.table("messages").insert({
-            "lead_phone": phone,
+            "lead_id": lead_id,
             "direction": direction,
-            "body": body,
+            "content": body,
             "state": state,
             "source": source
         }).execute()
