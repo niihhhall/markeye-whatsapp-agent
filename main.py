@@ -12,7 +12,7 @@ app.include_router(calendly_router)
 
 @app.get("/")
 async def health():
-    return {"status": "After5 Agent is running", "version": "1.0.0"}
+    return {"status": "After5 Agent is running", "version": "1.0.1"}
 
 @app.get("/health")
 async def health_check():

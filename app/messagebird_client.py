@@ -123,10 +123,11 @@ async def mark_as_read(message_id: str) -> bool:
                 logger.debug("Bird: message %s marked as read", message_id)
                 return True
             else:
-                logger.error("Bird mark_as_read failed: %s — %s", response.status_code, response.text)
+                # Log as warning instead of error to reduce noise if it's a common 403/Forbidden
+                logger.warning("Bird mark_as_read failed (likely permissions): %s — %s", response.status_code, response.text)
                 return False
-    except Exception as exc:
-        logger.error("Bird mark_as_read error: %s", exc)
+    except (httpx.RequestError, Exception) as exc:
+        logger.warning("Bird mark_as_read connection error: %s", exc)
         return False
 
 
