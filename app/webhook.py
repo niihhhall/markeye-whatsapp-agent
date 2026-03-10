@@ -101,10 +101,17 @@ async def bird_webhook(request: Request, background_tasks: BackgroundTasks):
         sender_phone = await get_contact_phone(contact_id)
         logger.info("Phone from Contacts API: %s", sender_phone)
 
+    # Fallback for some Bird v2 formats where phone is in contact.key
+    if not sender_phone:
+        sender_phone = contact_obj.get("key")
+        if sender_phone:
+            sender_phone = _to_internal_phone(sender_phone)
+            logger.info("Phone from contact.key fallback: %s", sender_phone)
+
     if not sender_phone:
         logger.error(
-            "Could not resolve phone. sender=%s contact=%s",
-            sender_obj, contact_obj
+            "Could not resolve phone. Full message payload: %s",
+            json.dumps(message)
         )
         return {"status": "error", "reason": "phone_resolution_failed"}
 

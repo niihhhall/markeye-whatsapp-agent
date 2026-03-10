@@ -31,15 +31,15 @@ def _to_bird_phone(phone: str) -> str:
 def _to_internal_phone(phone: str) -> str:
     """
     Convert Bird phone format to internal format.
-    Bird:        +447700900000  (or integer 447700900000)
+    Bird:        +447700900000, 447700900000, or whatsapp:+44...
     Our system:  whatsapp:+447700900000
     """
     cleaned = str(phone).strip()
+    # Remove whatsapp: prefix if already present to avoid double prefixing
+    cleaned = cleaned.replace("whatsapp:", "")
     if not cleaned.startswith("+"):
         cleaned = "+" + cleaned
-    if not cleaned.startswith("whatsapp:"):
-        cleaned = "whatsapp:" + cleaned
-    return cleaned
+    return "whatsapp:" + cleaned
 
 
 def _workspace_channel_url(path: str = "") -> str:
@@ -75,6 +75,8 @@ async def send_message(to: str, body: str) -> dict | None:
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
+            logger.info("Bird: sending to %s via URL: %s", bird_phone, _workspace_channel_url("/messages"))
+            logger.info("Bird: payload: %s", json.dumps(payload))
             response = await client.post(
                 _workspace_channel_url("/messages"),
                 headers=_get_headers(),
@@ -85,9 +87,10 @@ async def send_message(to: str, body: str) -> dict | None:
                 return response.json()
             else:
                 logger.error(
-                    "Bird send failed: %s — %s",
+                    "Bird send failed: %s — %s | Headers: %s",
                     response.status_code,
                     response.text,
+                    response.headers
                 )
                 return None
     except Exception as exc:
