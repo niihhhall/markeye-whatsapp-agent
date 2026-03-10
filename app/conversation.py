@@ -78,9 +78,7 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
         new_buffer = await redis_client.lrange(f"buffer:{phone}", 0, -1)
         if new_buffer:
             logger.info("[Conversation] New messages arrived during processing for %s, re-generating", phone)
-            combined = message + "\n" + "\n".join(
-                m.decode() if isinstance(m, bytes) else m for m in new_buffer
-            )
+            combined = message + "\n" + "\n".join(new_buffer)
             await redis_client.get_and_clear_buffer(phone)
             await redis_client.set_processing(phone, False)
             # Re-process with combined input

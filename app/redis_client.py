@@ -130,6 +130,14 @@ class RedisClient:
         else:
             await self.redis.delete(f"processing:{phone}")
 
+    async def lrange(self, key: str, start: int, stop: int) -> List[str]:
+        """Expose lrange from underlying redis."""
+        try:
+            return await self.redis.lrange(key, start, stop)
+        except Exception as e:
+            print(f"[Redis] ❌ lrange failed for {key}: {e}", flush=True)
+            return []
+
     async def has_sent_calendly(self, phone: str) -> bool:
         return await self.redis.exists(f"calendly_sent:{phone}") > 0
 
