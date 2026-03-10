@@ -38,14 +38,17 @@ async def _buffer_timeout_handler(phone: str, last_message_id: str = ""):
 
 @router.post("/webhook")
 async def bird_webhook(request: Request, background_tasks: BackgroundTasks):
+    print(f"\n[Webhook] Raw request received at {datetime.now().isoformat()}", flush=True)
     try:
         try:
             payload = await request.json()
         except Exception:
+            print("[Webhook] ❌ Failed to parse JSON body", flush=True)
             logger.warning("Webhook: non-JSON body received")
             return {"status": "error", "reason": "invalid_json"}
 
         # Temporarily log at WARNING so it shows in Railway logs for debugging
+        print(f"[Webhook] Payload received: {json.dumps(payload)[:200]}...", flush=True)
         logger.warning("Bird webhook payload: %s", json.dumps(payload)[:1000])
 
         event = payload.get("event", payload.get("type", ""))
