@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-async def _buffer_timeout_handler(phone: str, last_message_id: str = ""):
+async def _buffer_timeout_handler(phone: str, last_message_id: str = "", conversation_id: str = ""):
     """Waits for input buffer to expire, then processes combined message."""
     print(f"[Webhook] _buffer_timeout_handler started for {phone}", flush=True)
     # Simulation: Someone "opens" the notification after a short delay
@@ -32,7 +32,7 @@ async def _buffer_timeout_handler(phone: str, last_message_id: str = ""):
         combined_message = " ".join(messages)
         print(f"[Webhook] Processing combined message for {phone}: '{combined_message[:50]}...'", flush=True)
         # Use 'mixed' if any message was audio, but for simple buffer just default to text or pass from first
-        await process_conversation(phone, combined_message)
+        await process_conversation(phone, combined_message, conversation_id)
     else:
         print(f"[Webhook] No buffered messages for {phone}", flush=True)
 
@@ -150,7 +150,7 @@ async def bird_webhook(request: Request, background_tasks: BackgroundTasks):
         await redis_client.set_buffer_timer(sender_phone)
         
         logger.info("[Webhook] Scheduling _buffer_timeout_handler for %s", sender_phone)
-        background_tasks.add_task(_buffer_timeout_handler, sender_phone, message_id)
+        background_tasks.add_task(_buffer_timeout_handler, sender_phone, message_id, message.get("conversationId", ""))
 
         return {"status": "ok"}
 

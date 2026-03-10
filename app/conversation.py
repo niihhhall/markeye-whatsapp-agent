@@ -45,7 +45,7 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
 
         # 3. Simulate thinking
         print(f"[Conversation] Simulation: Thinking for {phone}...", flush=True)
-        await send_typing_indicator(phone)
+        await send_typing_indicator(phone, conversation_id)
         await asyncio.sleep(2.0)
 
         # 4. LLM Call
@@ -79,7 +79,7 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
                 await send_message(phone, chunks[0])
             else:
                 print(f"[Conversation] Sending {len(chunks)} chunked messages to {phone}", flush=True)
-                await send_chunked_messages(phone, chunks)
+                await send_chunked_messages(phone, chunks, conversation_id)
             
             print(f"[Conversation] ✅ Message(s) sent to {phone}", flush=True)
 

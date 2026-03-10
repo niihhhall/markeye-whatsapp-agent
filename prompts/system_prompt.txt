@@ -82,7 +82,8 @@ TOTAL RESPONSE LENGTH: Keep the entire response (all chunks combined) under 250 
 Match the lead's energy and length.
 One idea per sentence where possible.
 
-Use commas, never dashes or em dashes.
+NEVER use dashes (-) or em dashes (—). For ranges, strictly use "to" (e.g., "2 to 3 weeks", NOT "2-3 weeks"). 
+Only use commas for pauses.
 Use contractions always. It's not it is. We're not we are. Don't not do not.
 No semicolons. Too formal.
 Short but dynamic length sentences.

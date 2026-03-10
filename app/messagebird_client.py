@@ -121,13 +121,25 @@ async def mark_as_read(message_id: str) -> bool:
         return False
 
 
-async def send_typing_indicator(to: str) -> bool:
+async def send_typing_indicator(to: str, conversation_id: str = "") -> bool:
     """
-    Simulated typing indicator. 
-    Bird Channels API v2 currently doesn't support a dedicated 'typing' endpoint for WhatsApp.
-    We simulate this by adding a human-like delay between messages.
+    Experimental: Try to send a 'typing' status via Bird Channels API.
+    If conversation_id is provided, tries to use the conversations endpoint.
+    Otherwise, it's just a simulation.
     """
-    return True
+    if not conversation_id:
+        # Fallback to simulation if no ID
+        return True
+        
+    try:
+        url = f"{BASE_URL}/workspaces/{settings.MESSAGEBIRD_WORKSPACE_ID}/channels/{settings.MESSAGEBIRD_CHANNEL_ID}/conversations/{conversation_id}/typing"
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            # Note: This is an experimental guess at the Bird typing endpoint
+            response = await client.post(url, headers=_get_headers())
+            return response.status_code in (200, 201, 204)
+    except Exception as exc:
+        logger.debug("Bird typing indicator error: %s", exc)
+        return False
 
 
 async def reply_to_conversation(conversation_id: str, body: str) -> dict | None:
@@ -135,13 +147,13 @@ async def reply_to_conversation(conversation_id: str, body: str) -> dict | None:
     return None
 
 
-async def send_chunked_messages(to: str, chunks: list[str]) -> None:
+async def send_chunked_messages(to: str, chunks: list[str], conversation_id: str = "") -> None:
     """
     Send multiple messages with realistic typing delays.
     """
     for i, chunk in enumerate(chunks):
         if i > 0:
-            await send_typing_indicator(to)
+            await send_typing_indicator(to, conversation_id)
             delay = calculate_typing_delay(chunk)
             await asyncio.sleep(delay)
         await send_message(to, chunk)
