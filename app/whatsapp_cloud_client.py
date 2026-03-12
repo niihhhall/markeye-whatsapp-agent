@@ -106,10 +106,14 @@ async def mark_as_read(message_id: str) -> bool:
         logger.error("WhatsApp Cloud mark_as_read error: %s", exc)
         return False
 
-async def send_typing_indicator(to: str) -> bool:
+async def send_typing_indicator(to: str, message_id: str = "") -> bool:
     """
     Send a typing indicator to the WhatsApp user.
+    Requires message_id to link the indicator to the conversation.
     """
+    if not message_id:
+        return False
+        
     cloud_phone = _to_cloud_phone(to)
     url = f"{BASE_URL}/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
     
@@ -117,12 +121,14 @@ async def send_typing_indicator(to: str) -> bool:
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
         "to": cloud_phone,
+        "status": "read",
+        "message_id": message_id,
         "typing_indicator": {"type": "text"}
     }
     
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            print(f"WhatsApp Cloud: typing indicator to {cloud_phone}", flush=True)
+            print(f"WhatsApp Cloud: typing indicator to {cloud_phone} for msg {message_id}", flush=True)
             response = await client.post(
                 url,
                 headers=_get_headers(),

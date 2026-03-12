@@ -59,7 +59,7 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
 
         # Step 5: Simulate thinking with typing indicator
         print(f"[Conversation] 💭 Sending typing indicator to {phone}", flush=True)
-        await send_typing_indicator(phone, conversation_id)
+        await send_typing_indicator(phone, conversation_id, message_id)
 
         # Step 6: LLM Call
         messages = await build_enhanced_context(session, lead_data, message)

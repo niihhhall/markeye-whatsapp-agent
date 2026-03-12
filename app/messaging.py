@@ -24,10 +24,10 @@ async def send_chunked_messages(to: str, chunks: list[str], conversation_id: str
         return await cloud.send_chunked_messages(to, chunks, conversation_id)
     return await bird.send_chunked_messages(to, chunks, conversation_id)
 
-async def send_typing_indicator(to: str, conversation_id: str = "") -> bool:
+async def send_typing_indicator(to: str, conversation_id: str = "", message_id: str = "") -> bool:
     """Send typing indicator using the configured provider."""
     if settings.MESSAGING_PROVIDER == "whatsapp_cloud":
-        return await cloud.send_typing_indicator(to)
+        return await cloud.send_typing_indicator(to, message_id)
     return await bird.send_typing_indicator(to, conversation_id)
 
 async def get_contact_phone(contact_id: str) -> str | None:
