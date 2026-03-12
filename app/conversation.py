@@ -26,7 +26,7 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
 
         # Step 1: Wait 5 seconds, then send read receipt (blue ticks)
         await asyncio.sleep(5)
-        if conversation_id and message_id:
+        if message_id and (conversation_id or settings.MESSAGING_PROVIDER == "whatsapp_cloud"):
             from app.messaging import mark_as_read
             await mark_as_read(conversation_id, message_id)
 
