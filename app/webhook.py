@@ -10,6 +10,8 @@ from app.conversation import process_conversation
 from app.messagebird_client import get_contact_phone as bird_get_contact, _to_internal_phone as bird_to_internal, send_message as bird_send, mark_as_read as bird_mark
 from app.whatsapp_cloud_client import _to_internal_phone as cloud_to_internal
 from app.stt import process_voice_note
+from app.supabase_client import supabase_client
+from app.tracker import AlbertTracker
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -258,3 +260,52 @@ async def admin_reset_session(request: Request):
     except Exception as e:
         logger.error("[Admin] Reset failed: %s", e)
         return {"status": "error", "reason": str(e)}
+
+
+@router.get("/admin/lead-status/{phone}")
+async def admin_get_lead_status(phone: str):
+    """
+    Returns the real-time status of a lead from both Redis and Supabase.
+    Usage: GET /admin/lead-status/whatsapp:+918160178327
+    """
+    try:
+        # 1. Get Redis Session
+        session = await redis_client.get_session(phone)
+        
+        # 2. Get Lead from Supabase
+        tracker = AlbertTracker()
+        lead = tracker.get_lead_by_phone(phone)
+        
+        if not lead:
+            return {"status": "error", "message": "Lead not found in Supabase database"}
+            
+        # 3. Get BANT / Conversation State from Supabase
+        res = supabase_client.client.table("conversation_state").select("*").eq("lead_id", lead["id"]).execute()
+        conv_state = res.data[0] if res.data else {}
+        
+        return {
+            "phone": phone,
+            "lead": {
+                "id": lead.get("id"),
+                "name": f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip() or "Unknown",
+                "score": lead.get("signal_score", 0),
+                "temperature": lead.get("temperature", "Cold"),
+                "outcome": lead.get("outcome", "In Progress"),
+            },
+            "status": {
+                "redis_state": session.get("state") if session else "NOT_IN_REDIS",
+                "db_state": conv_state.get("current_state", "None"),
+                "message_count": conv_state.get("message_count", 0),
+                "last_active": conv_state.get("last_active_at"),
+            },
+            "bant_signals": {
+                "budget": conv_state.get("bant_budget"),
+                "authority": conv_state.get("bant_authority"),
+                "need": conv_state.get("bant_need"),
+                "timeline": conv_state.get("bant_timeline"),
+            },
+            "recent_chat_history": session.get("history", []) if session else []
+        }
+    except Exception as e:
+        logger.error("[Admin] Lead status check failed: %s", e)
+        return {"status": "error", "message": str(e)}

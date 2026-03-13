@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     # MessageBird / Bird
     MESSAGEBIRD_API_KEY: str = os.getenv("MESSAGEBIRD_API_KEY", "")
     MESSAGEBIRD_WORKSPACE_ID: str = os.getenv("MESSAGEBIRD_WORKSPACE_ID", "")
-    MESSAGEBIRD_CHANNEL_ID: str
+    MESSAGEBIRD_CHANNEL_ID: str = os.getenv("MESSAGEBIRD_CHANNEL_ID", "")
     MESSAGEBIRD_WHATSAPP_NUMBER: str = ""  # for reference only
 
 
