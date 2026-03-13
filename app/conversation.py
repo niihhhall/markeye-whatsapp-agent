@@ -107,15 +107,16 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
         # Step 10: Calendly Resend Logic (>10 message distance)
         response_text = await check_and_send_calendly(phone, response_text, session["history"])
 
-        # Step 11: Send coherent response (Single bubble logic)
+        # Step 11: Send natural multi-bubble response
         if response_text:
-            print(f"[Conversation] 📤 Sending coherent response to {phone}", flush=True)
-            # Dynamic typing delay for the ONE bubble
-            from app.chunker import calculate_typing_delay
-            final_typing_delay = calculate_typing_delay(response_text)
-            await asyncio.sleep(final_typing_delay)
+            print(f"[Conversation] 📤 Splitting and sending multi-bubble response to {phone}", flush=True)
+            from app.chunker import chunk_message
+            chunks = chunk_message(response_text)
             
-            await send_message(phone, response_text)
+            # Use the existing utility that handles delays and typing indicators
+            from app.messaging import send_chunked_messages
+            await send_chunked_messages(phone, chunks, conversation_id)
+            
             if lead_id:
                 tracker.set_typing_status(lead_id, False)
 

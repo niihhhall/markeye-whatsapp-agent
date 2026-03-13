@@ -3,22 +3,64 @@ import random
 
 def chunk_message(text: str) -> list:
     """
-    Cleans text (dashes, whitespace) and returns a single coherent bubble.
+    Cleans text and splits into multiple bubbles based on natural pauses (. ! ?).
     Enforces 'No Dashes' rule.
     """
     if not text:
         return []
 
     # 1. Enforce 'No Dashes' rule
-    # Convert ranges like 2-3 to "2 to 3"
     text = re.sub(r'(\d+)\s*[-—]\s*(\d+)', r'\1 to \2', text)
-    # Remove any remaining dashes/em-dashes, replace with commas for natural pause
     text = text.replace("—", ",").replace("--", ",").replace("- ", ", ").replace(" -", " ,")
     
-    # 2. Cleanup separators if LLM used them
+    # 2. Cleanup separators
     text = text.replace("|||", " ")
     
-    return [text.strip()]
+    # 3. Natural Sentence Splitting
+    # We split on . ! or ? followed by a space, but protect common abbreviations
+    # Common abbreviations to NOT split on
+    abbreviations = ["Mr.", "Mrs.", "Dr.", "Ms.", "e.g.", "i.e.", "vs.", "etc.", "st.", "ave."]
+    
+    # Protect abbreviations by temporary replacement
+    protected_text = text
+    for i, abbr in enumerate(abbreviations):
+        protected_text = protected_text.replace(abbr, f"__ABBR{i}__")
+    
+    # Split using regex: look for . ! or ? followed by space (or end of string)
+    chunks = re.split(r'(?<=[.!?])\s+', protected_text)
+    
+    # Restore abbreviations and clean up
+    temp_chunks = []
+    for chunk in chunks:
+        c = chunk.strip()
+        if not c:
+            continue
+        for i, abbr in enumerate(abbreviations):
+            c = c.replace(f"__ABBR{i}__", abbr)
+        temp_chunks.append(c)
+    
+    # 4. Smart Merge: Combine chunks shorter than 40 chars with the previous one
+    merged_chunks = []
+    for chunk in temp_chunks:
+        if merged_chunks and len(merged_chunks[-1]) < 40:
+            # If previous was too short, merge CURRENT into it
+            merged_chunks[-1] = merged_chunks[-1] + " " + chunk
+        elif merged_chunks and len(chunk) < 30:
+            # If current is very short, merge into PREVIOUS
+            merged_chunks[-1] = merged_chunks[-1] + " " + chunk
+        else:
+            merged_chunks.append(chunk)
+
+    # 5. Bubble Cap: Maximum 3 bubbles
+    if len(merged_chunks) > 3:
+        # Keep first two bubbles as is
+        final_list = merged_chunks[:2]
+        # Combine everything else into the 3rd bubble
+        remaining = " ".join(merged_chunks[2:])
+        final_list.append(remaining)
+        return final_list
+    
+    return merged_chunks if merged_chunks else [text.strip()]
 
 
 def calculate_typing_delay(text: str) -> float:
