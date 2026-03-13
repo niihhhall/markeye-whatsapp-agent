@@ -94,10 +94,17 @@ async def handle_whatsapp_cloud_webhook(payload: dict, background_tasks: Backgro
                     if msg_type == "text":
                         message_text = message.get("text", {}).get("body", "")
                     elif msg_type == "audio":
-                        # Audio handling would require fetching the media URL from Meta
-                        # Placeholder for now
-                        logger.warning("WhatsApp Cloud: Audio messages not yet supported")
-                        continue
+                        from app.whatsapp_cloud_client import get_media_url, _get_headers
+                        media_id = message.get("audio", {}).get("id")
+                        if media_id:
+                            logger.info("WhatsApp Cloud: Processing audio message %s", media_id)
+                            media_url = await get_media_url(media_id)
+                            if media_url:
+                                message_text = await process_voice_note(media_url, headers=_get_headers())
+                            else:
+                                logger.error("WhatsApp Cloud: Could not retrieve media URL for %s", media_id)
+                        else:
+                            logger.error("WhatsApp Cloud: Audio message received but no media ID found")
                         
                     if not message_text:
                         continue

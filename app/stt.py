@@ -8,24 +8,24 @@ logger = logging.getLogger(__name__)
 WHISPER_URL = "https://api.openai.com/v1/audio/transcriptions"
 
 
-async def download_audio(audio_url: str) -> bytes | None:
+async def download_audio(audio_url: str, custom_headers: dict = None) -> bytes | None:
     """
-    Download audio file from MessageBird media URL.
+    Download audio file from a media URL.
     
-    MessageBird media URLs that start with media.messagebird.com 
-    do NOT require authentication. Other MessageBird-hosted media
-    may need the AccessKey header.
+    Supports MessageBird and custom headers (e.g., for WhatsApp).
     
     Args:
-        audio_url: URL of the audio file from MessageBird webhook
+        audio_url: URL of the audio file
+        custom_headers: Optional headers for authentication
     
     Returns:
         Audio file bytes or None on error
     """
     try:
-        headers = {}
-        # Add MessageBird auth for non-public media URLs
-        if "media.messagebird.com" not in audio_url:
+        headers = custom_headers if custom_headers is not None else {}
+        
+        # Fallback to MessageBird auth if no custom headers provided and it's a MB URL
+        if not headers and "media.messagebird.com" not in audio_url:
             headers["Authorization"] = f"AccessKey {settings.MESSAGEBIRD_API_KEY}"
         
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
@@ -94,20 +94,21 @@ async def transcribe_audio(audio_bytes: bytes, filename: str = "voice.ogg") -> s
         return None
 
 
-async def process_voice_note(audio_url: str) -> str | None:
+async def process_voice_note(audio_url: str, headers: dict = None) -> str | None:
     """
     Full pipeline: download audio → transcribe → return text.
     
     This is the main function to call from webhook.py.
     
     Args:
-        audio_url: URL of the audio file from MessageBird webhook
+        audio_url: URL of the audio file
+        headers: Optional auth headers for download
     
     Returns:
         Transcribed text or None if transcription failed
     """
     # Step 1: Download audio
-    audio_bytes = await download_audio(audio_url)
+    audio_bytes = await download_audio(audio_url, custom_headers=headers)
     if not audio_bytes:
         logger.error("Failed to download voice note audio")
         return None

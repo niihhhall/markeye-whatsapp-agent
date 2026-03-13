@@ -151,3 +151,38 @@ async def send_chunked_messages(to: str, chunks: list[str], conversation_id: str
             delay = calculate_typing_delay(chunk)
             await asyncio.sleep(delay)
         await send_message(to, chunk)
+
+async def get_media_url(media_id: str) -> str | None:
+    """
+    Get the temporary download URL for a media file via its ID.
+    """
+    url = f"{BASE_URL}/{media_id}"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=_get_headers())
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("url")
+            else:
+                logger.error("WhatsApp Cloud get_media_url failed: %s - %s", response.status_code, response.text)
+                return None
+    except Exception as exc:
+        logger.error("WhatsApp Cloud get_media_url error: %s", exc)
+        return None
+
+async def download_media(url: str) -> bytes | None:
+    """
+    Download a media file using its temporary URL.
+    This requires the same Bearer token.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            response = await client.get(url, headers=_get_headers())
+            if response.status_code == 200:
+                return response.content
+            else:
+                logger.error("WhatsApp Cloud download_media failed: %s - %s", response.status_code, response.text)
+                return None
+    except Exception as exc:
+        logger.error("WhatsApp Cloud download_media error: %s", exc)
+        return None
