@@ -36,10 +36,10 @@ def fetch_live_logs(phones=None, limit=20, watch=False, monitor_all=False):
         return
 
     print("-" * 60)
-    last_seen_id = None
+    last_seen_ts = None
 
     def print_messages(msg_limit, reset=False):
-        nonlocal last_seen_id
+        nonlocal last_seen_ts
         try:
             query = supabase_client.client.table("messages")\
                 .select("*, leads(first_name, last_name, phone)")\
@@ -59,12 +59,10 @@ def fetch_live_logs(phones=None, limit=20, watch=False, monitor_all=False):
             # Reverse to show chronological order
             new_msgs = []
             for msg in reversed(messages):
-                # Ensure we have a string ID or timestamp for comparison
-                # Using 'id' if it exists, otherwise relying on polling window
-                msg_id = msg.get("id")
-                if last_seen_id is None or (msg_id and msg_id > last_seen_id):
+                msg_ts = msg.get("created_at")
+                if last_seen_ts is None or (msg_ts and msg_ts > last_seen_ts):
                     new_msgs.append(msg)
-                    if msg_id: last_seen_id = msg_id
+                    if msg_ts: last_seen_ts = msg_ts
             
             for msg in new_msgs:
                 lead_info = msg.get("leads", {})
