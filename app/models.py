@@ -12,8 +12,6 @@ class ConversationState(str, Enum):
     CONFIRMED = "confirmed"
     WAITING = "waiting"      # Lead sending low-content spam
     CLOSED = "closed"        # Conversation permanently ended
-    WAITING = "waiting"
-    CLOSED = "closed"
 
 class LeadCreate(BaseModel):
     name: str
