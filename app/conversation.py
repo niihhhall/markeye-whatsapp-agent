@@ -95,11 +95,10 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
             return
 
         # Step 9: Interrupt Check — did new messages arrive during LLM call?
-        new_buffer = await redis_client.lrange(f"buffer:{phone}", 0, -1)
-        if new_buffer:
+        new_messages_str = await redis_client.get_and_clear_buffer(phone)
+        if new_messages_str:
             logger.info("[Conversation] New messages arrived during processing for %s, re-generating", phone)
-            combined = message + "\n" + "\n".join(new_buffer)
-            await redis_client.get_and_clear_buffer(phone)
+            combined = message + "\n" + new_messages_str
             await redis_client.set_processing(phone, False)
             # Re-process with combined input
             return await process_conversation(phone, combined, conversation_id, message_id)
@@ -115,7 +114,7 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
             
             # Use the existing utility that handles delays and typing indicators
             from app.messaging import send_chunked_messages
-            await send_chunked_messages(phone, chunks, conversation_id)
+            await send_chunked_messages(phone, chunks, conversation_id, message_id)
             
             if lead_id:
                 tracker.set_typing_status(lead_id, False)

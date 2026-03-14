@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     TYPING_DELAY_PER_CHAR: float = 0.03
     CHUNK_DELAY_SECONDS: float = 1.5
     MAX_FOLLOWUPS: int = 2
+    MAX_CHUNKS: int = 3
 
     # OpenAI / Whisper
     OPENAI_API_KEY: str = ""

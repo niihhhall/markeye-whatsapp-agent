@@ -1,183 +1,116 @@
-import json
-import logging
 import asyncio
-from datetime import datetime, timezone
-from fastapi import APIRouter, Request, BackgroundTasks, Response, Query
-from app.models import ConversationState
+import logging
+from fastapi import APIRouter, Request, Response, BackgroundTasks
 from app.config import settings
 from app.redis_client import redis_client
-from app.conversation import process_conversation
-from app.messagebird_client import get_contact_phone as bird_get_contact, _to_internal_phone as bird_to_internal, send_message as bird_send, mark_as_read as bird_mark
-from app.whatsapp_cloud_client import _to_internal_phone as cloud_to_internal
-from app.stt import process_voice_note
-from app.supabase_client import supabase_client
-from app.tracker import AlbertTracker
+from app.whatsapp_cloud_client import mark_as_read
+from app.models import ConversationState
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+MAX_INTERRUPT_RETRIES = 2
 
-async def _buffer_timeout_handler(phone: str, batch_id: str, conversation_id: str = "", last_message_id: str = ""):
-    """Waits for input buffer to expire (3s silence) or hard-max (8s), then processes."""
-    logger.info("[Webhook] _buffer_timeout_handler started for %s (batch: %s)", phone, batch_id)
-    
-    # Wait for the rolling buffer window (3s)
-    await asyncio.sleep(settings.INPUT_BUFFER_SECONDS)
-
-    # Check if a newer batch has started
-    current_batch = await redis_client.get_batch_id(phone)
-    is_hard_max = await redis_client.should_process_buffer(phone)
-    
-    if current_batch != batch_id and not is_hard_max:
-        logger.info("[Webhook] Newer batch exists for %s, skipping handler %s", phone, batch_id)
-        return
-
-    # Process all buffered messages
-    messages = await redis_client.get_and_clear_buffer(phone)
-    if messages:
-        combined_message = "\n".join(messages)
-        logger.info("[Webhook] Processing combined batch %s for %s (%d messages)", batch_id, phone, len(messages))
-        # Call conversation engine
-        await process_conversation(phone, combined_message, conversation_id, last_message_id)
-    else:
-        logger.info("[Webhook] No buffered messages for %s in batch %s", phone, batch_id)
-
+# ═══ WEBHOOK VERIFICATION (GET) ═══
 
 @router.get("/webhook")
-async def verify_webhook(
-    hub_mode: str = Query(None, alias="hub.mode"),
-    hub_verify_token: str = Query(None, alias="hub.verify_token"),
-    hub_challenge: str = Query(None, alias="hub.challenge"),
-):
-    """WhatsApp Cloud API Webhook Verification."""
-    if hub_mode == "subscribe" and hub_verify_token == settings.WHATSAPP_VERIFY_TOKEN:
-        logger.info("Webhook verified successfully")
-        return Response(content=hub_challenge, media_type="text/plain")
+async def verify_webhook(request: Request):
+    """Meta sends GET to verify webhook URL during setup."""
+    mode = request.query_params.get("hub.mode")
+    token = request.query_params.get("hub.verify_token")
+    challenge = request.query_params.get("hub.challenge")
     
-    # Also support simple reachability test
-    return {"status": "reachable", "time": datetime.now().isoformat()}
+    if mode == "subscribe" and token == settings.WHATSAPP_VERIFY_TOKEN:
+        logger.info("Webhook verified successfully")
+        return Response(content=challenge, media_type="text/plain")
+    return Response(content="Reachable", media_type="text/plain")
 
+# ═══ WEBHOOK HANDLER (POST) ═══
 
 @router.post("/webhook")
-async def combined_webhook(request: Request, background_tasks: BackgroundTasks):
+async def webhook(request: Request, background_tasks: BackgroundTasks):
+    """
+    Receive incoming WhatsApp Cloud API webhook.
+    NEVER process immediately. Always buffer first.
+    Return 200 instantly — process async.
+    """
     try:
-        try:
-            payload = await request.json()
-        except Exception:
-            logger.warning("Webhook: non-JSON body received")
-            return {"status": "error", "reason": "invalid_json"}
-
-        # Detect Meta/WhatsApp Cloud payload
-        if payload.get("object") == "whatsapp_business_account":
-            return await handle_whatsapp_cloud_webhook(payload, background_tasks)
+        payload = await request.json()
+        
+        # Ignore non-whatsapp events
+        if payload.get("object") != "whatsapp_business_account":
+            return {"status": "ignored"}
+        
+        # Extract message data from nested structure
+        entry = payload.get("entry", [{}])[0]
+        changes = entry.get("changes", [{}])[0]
+        value = changes.get("value", {})
+        
+        # IMPORTANT: Ignore status updates (delivered, read receipts)
+        # Only process actual messages
+        messages = value.get("messages")
+        if not messages:
+            return {"status": "ok"}  # Status update, not a message
+        
+        message = messages[0]
+        contacts = value.get("contacts", [{}])
+        contact = contacts[0] if contacts else {}
+        
+        # Extract fields
+        sender_phone_raw = message.get("from", "")         # "447700900000"
+        message_id = message.get("id", "")                  # "wamid.xxx"
+        message_type = message.get("type", "")               # "text", "audio", etc.
+        sender_name = contact.get("profile", {}).get("name", "")
+        
+        # Convert to internal format
+        cleaned = sender_phone_raw.strip().lstrip("+")
+        sender_phone = f"whatsapp:+{cleaned}"
+        
+        # Dedup check
+        if message_id and await redis_client.check_dedup(message_id):
+            return {"status": "duplicate"}
+        
+        # ═══ EXTRACT MESSAGE TEXT ═══
+        if message_type == "text":
+            message_text = message.get("text", {}).get("body", "")
             
-        # Fallback to MessageBird
-        return await bird_webhook(payload, background_tasks)
-    except Exception as e:
-        logger.critical("[Webhook] combined_webhook failure: %s", e, exc_info=True)
-        return {"status": "error", "reason": str(e)}
-
-async def handle_whatsapp_cloud_webhook(payload: dict, background_tasks: BackgroundTasks):
-    """Handle inbound messages from WhatsApp Cloud API."""
-    try:
-        entries = payload.get("entry", [])
-        for entry in entries:
-            changes = entry.get("changes", [])
-            for change in changes:
-                value = change.get("value", {})
-                messages = value.get("messages", [])
-                for message in messages:
-                    message_id = message.get("id")
-                    from_phone = message.get("from")
-                    sender_phone = cloud_to_internal(from_phone)
-                    
-                    # Extract text content
-                    message_text = ""
-                    msg_type = message.get("type")
-                    if msg_type == "text":
-                        message_text = message.get("text", {}).get("body", "")
-                    elif msg_type == "audio":
-                        from app.whatsapp_cloud_client import get_media_url, _get_headers
-                        media_id = message.get("audio", {}).get("id")
-                        if media_id:
-                            logger.info("WhatsApp Cloud: Processing audio message %s", media_id)
-                            media_url = await get_media_url(media_id)
-                            if media_url:
-                                message_text = await process_voice_note(media_url, headers=_get_headers())
-                            else:
-                                logger.error("WhatsApp Cloud: Could not retrieve media URL for %s", media_id)
-                        else:
-                            logger.error("WhatsApp Cloud: Audio message received but no media ID found")
-                        
-                    if not message_text:
-                        continue
-                        
-                    await process_inbound(sender_phone, message_text, message_id, "", background_tasks)
-                    
-        return {"status": "ok"}
-    except Exception as e:
-        logger.error("WhatsApp Cloud webhook error: %s", e)
-        return {"status": "error"}
-
-async def bird_webhook(payload: dict, background_tasks: BackgroundTasks):
-    try:
-        event = payload.get("event", payload.get("type", ""))
-        if event and not event.endswith(".inbound"):
-            return {"status": "ignored", "reason": f"event:{event}"}
-
-        message = payload.get("payload", payload)
-        message_id = message.get("id", "")
-        conversation_id = message.get("conversationId", "")
-        
-        # Resolve sender phone
-        sender_phone = None
-        sender_obj = message.get("sender", {})
-        contact_obj = sender_obj.get("contact", {})
-        identifier = contact_obj.get("identifierValue", "")
-        
-        if identifier:
-            sender_phone = bird_to_internal(identifier)
-        
-        if not sender_phone:
-            logger.error("Could not resolve phone for message %s", message_id)
-            return {"status": "error", "reason": "phone_resolution_failed"}
-
-        # Extract message content
-        body_obj = message.get("body", {})
-        msg_type = body_obj.get("type", "text")
-        message_text = ""
-
-        if msg_type == "text":
-            message_text = body_obj.get("text", {}).get("text", "")
-        elif msg_type == "audio":
-            audio_url = body_obj.get("audio", {}).get("url", "")
-            if audio_url:
-                message_text = await process_voice_note(audio_url)
+        elif message_type == "audio":
+            # Voice note — needs STT transcription
+            from app.stt import process_voice_note
+            from app.whatsapp_cloud_client import get_media_url, _get_headers
+            media_id = message.get("audio", {}).get("id", "")
+            media_url = await get_media_url(media_id)
+            if media_url:
+                message_text = await process_voice_note(media_url, headers=_get_headers())
+            else:
+                message_text = ""
+                
+            if not message_text:
+                # Transcription failed
+                from app.whatsapp_cloud_client import send_message
+                await send_message(sender_phone, "Sorry, had trouble hearing that. Mind typing it out?")
+                return {"status": "stt_failed"}
+        else:
+            # Image, document, sticker, location, etc. — ignore
+            logger.info(f"Unsupported message type: {message_type}")
+            return {"status": "ignored", "reason": f"type: {message_type}"}
         
         if not message_text:
-            return {"status": "ignored", "reason": "empty_body"}
-
-        await process_inbound(sender_phone, message_text, message_id, conversation_id, background_tasks)
-        return {"status": "ok"}
-    except Exception as e:
-        logger.error("Bird webhook error: %s", e)
-        return {"status": "error"}
-
-
-async def process_inbound(sender_phone: str, message_text: str, message_id: str, conversation_id: str, background_tasks: BackgroundTasks):
-    """Entry point for all inbound messages. Handles state guards and buffering."""
-    try:
+            return {"status": "empty"}
+        
+        logger.info(f"Message from {sender_phone} ({sender_name}): {message_text[:80]}...")
+        
+        # State Checking and Tracker Logging before Buffering
         session = await redis_client.get_session(sender_phone)
         if not session:
-            # Create minimal session to check state
             session = {"state": ConversationState.OPENING, "history": [], "turn_count": 0}
-            
-        state = session.get("state")
 
         # 1. CLOSED state — 24h cooldown guard
+        state = session.get("state")
         if state == ConversationState.CLOSED:
             last_updated_str = session.get("last_updated")
             if last_updated_str:
+                from datetime import datetime, timezone
                 try:
                     last_updated = datetime.fromisoformat(last_updated_str.replace('Z', '+00:00'))
                     hours_since = (datetime.now(timezone.utc) - last_updated).total_seconds() / 3600
@@ -190,26 +123,14 @@ async def process_inbound(sender_phone: str, message_text: str, message_id: str,
                         await redis_client.save_session(sender_phone, session)
                 except Exception as e:
                     logger.error("Error checking CLOSED cooldown: %s", e)
-
-        # 2. WAITING state — Low content guard
-        if state == ConversationState.WAITING:
-            words = message_text.strip().split()
-            if len(words) < 5:
-                logger.info("[Webhook] Lead %s in WAITING state, low-content ignored", sender_phone)
-                return {"status": "ignored", "reason": "waiting_low_content"}
-            else:
-                logger.info("[Webhook] Lead %s sent substantial message, resuming from WAITING", sender_phone)
-                session["state"] = ConversationState.DISCOVERY
-                session["low_content_count"] = 0
-                await redis_client.save_session(sender_phone, session)
-
-        # 3. Log inbound to tracker
+        
+        # Tracker Logging
         try:
             from app.tracker import AlbertTracker
             tracker = AlbertTracker()
             lead = tracker.get_lead_by_phone(sender_phone)
             if not lead:
-                lead = tracker.create_lead(phone=sender_phone)
+                lead = tracker.create_lead(phone=sender_phone, first_name=sender_name)
             if lead:
                 tracker.log_inbound(lead["id"], message_text)
         except Exception as e:
@@ -221,81 +142,162 @@ async def process_inbound(sender_phone: str, message_text: str, message_id: str,
         if is_spam_threshold_reached:
             return {"status": "ok", "action": "entered_waiting"}
 
-        # 5. Buffer message and start rolling timer
-        batch_id = f"batch_{datetime.now().timestamp()}_{message_id}"
-        await redis_client.buffer_message(sender_phone, message_text)
-        await redis_client.set_batch_id(sender_phone, batch_id)
+        # ═══ BUFFER — DON'T PROCESS YET ═══
+        batch_id = await redis_client.buffer_message(sender_phone, message_text)
         
-        background_tasks.add_task(_buffer_timeout_handler, sender_phone, batch_id, conversation_id, message_id)
-
+        # Mark as read (blue ticks) — do this immediately
+        background_tasks.add_task(
+            _delayed_read_receipt, message_id
+        )
+        
+        # Start buffer timer
+        background_tasks.add_task(
+            _delayed_buffer_process, sender_phone, batch_id, message_id
+        )
+        
+        # Safety: hard max timer
+        background_tasks.add_task(
+            _hard_max_check, sender_phone, message_id
+        )
+        
         return {"status": "ok"}
-
+        
     except Exception as e:
-        logger.critical("[Webhook] 🚨 CRITICAL WEBHOOK FAILURE: %s", e, exc_info=True)
-        return {"status": "error", "reason": str(e)}
+        logger.error(f"Webhook error: {e}")
+        return {"status": "error"}
 
+# ═══ DELAYED READ RECEIPT ═══
+
+async def _delayed_read_receipt(message_id: str):
+    """Send blue ticks after a short natural delay."""
+    try:
+        await asyncio.sleep(2.0)
+        await mark_as_read(message_id)
+    except Exception as e:
+        logger.error(f"Read receipt error: {e}")
+
+# ═══ BUFFER TIMER (3-second rolling) ═══
+
+async def _delayed_buffer_process(phone: str, batch_id: str, message_id: str):
+    """
+    Wait 3 seconds. If no new messages arrived (batch still current),
+    process the buffer. If new message arrived, this timer dies silently.
+    """
+    await asyncio.sleep(settings.INPUT_BUFFER_SECONDS)
+    
+    # Is this still the current batch?
+    if not await redis_client.is_batch_current(phone, batch_id):
+        return  # Newer message arrived — newer timer will handle it
+    
+    # Don't start processing if already generating (interrupt handler will pick up)
+    if await redis_client.is_generating(phone):
+        logger.info(f"Generation in progress for {phone}, interrupt will handle")
+        return
+    
+    combined_text = await redis_client.get_and_clear_buffer(phone)
+    if combined_text:
+        logger.info(f"Buffer ready for {phone}: {combined_text[:80]}...")
+        asyncio.create_task(
+            _process_with_interrupt(phone, combined_text, message_id=message_id)
+        )
+
+# ═══ HARD MAX TIMER (8-second safety cap) ═══
+
+async def _hard_max_check(phone: str, message_id: str):
+    """Force-process after 8 seconds even if messages keep arriving."""
+    await asyncio.sleep(settings.INPUT_BUFFER_MAX_SECONDS)
+    
+    # Only if buffer hasn't been processed yet
+    if await redis_client.is_generating(phone):
+        return  # Already processing
+    
+    # Check if we hit the hard max based on first message
+    if not await redis_client.has_hit_hard_max(phone):
+        return
+        
+    combined_text = await redis_client.get_and_clear_buffer(phone)
+    if combined_text:
+        logger.info(f"Hard max (8s) for {phone}, force-processing")
+        asyncio.create_task(
+            _process_with_interrupt(phone, combined_text, message_id=message_id)
+        )
+
+# ═══ MAIN PROCESSING WITH INTERRUPT PROTECTION ═══
+
+async def _process_with_interrupt(
+    phone: str, 
+    combined_text: str, 
+    retry_count: int = 0,
+    message_id: str = ""
+):
+    """
+    Generate reply with interrupt protection by passing to conversation engine.
+    If new messages arrive during LLM generation -> discard -> re-read -> re-generate.
+    """
+    from app.conversation import process_conversation
+    
+    try:
+        # Note: We rely on the process_conversation method internally checking states,
+        # but to fulfill the master prompt's exact flow, we wrap it here.
+        # process_conversation internally sets `processing` flag, 
+        # and has its own interrupt check. We will let `process_conversation` handle 
+        # the LLM call as it includes Tracker, Postgres, Calendly logic.
+        
+        # We wrap standard process_conversation with generating states
+        await redis_client.set_generating(phone)
+        
+        # Call the main conversation engine. It does its own specific operations.
+        # Since process_conversation also checks for interruptions natively (modified in conversation.py),
+        # we defer to it.
+        await process_conversation(phone, combined_text, conversation_id="", message_id=message_id)
+        
+        await redis_client.clear_generating(phone)
+        
+    except Exception as e:
+        logger.error(f"Processing error for {phone}: {e}")
+        await redis_client.clear_generating(phone)
 
 @router.post("/admin/reset-session")
 async def admin_reset_session(request: Request):
-    """
-    Admin endpoint to reset a lead's session (clears WAITING/CLOSED state).
-    Usage: POST /admin/reset-session
-    Body: {"phone": "whatsapp:+918160178327"}
-    """
+    """Admin endpoint to reset a lead's session"""
     try:
         body = await request.json()
         phone = body.get("phone", "").strip()
         if not phone:
             return {"status": "error", "reason": "phone is required"}
-        
-        # Clear the session entirely — Albert will treat them as a new lead
         await redis_client.redis.delete(f"session:{phone}")
         await redis_client.redis.delete(f"buffer:{phone}")
-        await redis_client.redis.delete(f"batch_id:{phone}")
+        await redis_client.redis.delete(f"batch:{phone}")
         await redis_client.redis.delete(f"calendly_sent:{phone}")
         await redis_client.redis.delete(f"low_content:{phone}")
-        
+        await redis_client.redis.delete(f"generating:{phone}")
         logger.info("[Admin] 🔄 Session reset for %s", phone)
-        return {"status": "ok", "message": f"Session reset for {phone}. Albert will treat this as a new conversation."}
+        return {"status": "ok", "message": f"Session reset for {phone}."}
     except Exception as e:
         logger.error("[Admin] Reset failed: %s", e)
         return {"status": "error", "reason": str(e)}
 
 @router.get("/admin/leads")
 async def admin_get_all_leads():
-    """
-    Returns a simple list of all active leads, their names, and phone numbers.
-    Useful for knowing what numbers to use for /admin/reset-session.
-    Usage: GET /admin/leads
-    """
     try:
         from app.tracker import AlbertTracker
         tracker = AlbertTracker()
         leads = tracker.get_all_leads()
         return {"status": "ok", "count": len(leads), "leads": leads}
     except Exception as e:
-        logger.error("[Admin] Failed to fetch leads: %s", e)
         return {"status": "error", "message": str(e)}
-
 
 @router.get("/admin/lead-status/{phone}")
 async def admin_get_lead_status(phone: str):
-    """
-    Returns the real-time status of a lead from both Redis and Supabase.
-    Usage: GET /admin/lead-status/whatsapp:+918160178327
-    """
     try:
-        # 1. Get Redis Session
         session = await redis_client.get_session(phone)
-        
-        # 2. Get Lead from Supabase
+        from app.tracker import AlbertTracker
+        from app.supabase_client import supabase_client
         tracker = AlbertTracker()
         lead = tracker.get_lead_by_phone(phone)
-        
         if not lead:
             return {"status": "error", "message": "Lead not found in Supabase database"}
             
-        # 3. Get BANT / Conversation State from Supabase
         res = supabase_client.client.table("conversation_state").select("*").eq("lead_id", lead["id"]).execute()
         conv_state = res.data[0] if res.data else {}
         
@@ -306,22 +308,16 @@ async def admin_get_lead_status(phone: str):
                 "name": f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip() or "Unknown",
                 "score": lead.get("signal_score", 0),
                 "temperature": lead.get("temperature", "Cold"),
-                "outcome": lead.get("outcome", "In Progress"),
             },
             "status": {
                 "redis_state": session.get("state") if session else "NOT_IN_REDIS",
                 "db_state": conv_state.get("current_state", "None"),
-                "message_count": conv_state.get("message_count", 0),
-                "last_active": conv_state.get("last_active_at"),
             },
             "bant_signals": {
                 "budget": conv_state.get("bant_budget"),
-                "authority": conv_state.get("bant_authority"),
-                "need": conv_state.get("bant_need"),
                 "timeline": conv_state.get("bant_timeline"),
             },
             "recent_chat_history": session.get("history", []) if session else []
         }
     except Exception as e:
-        logger.error("[Admin] Lead status check failed: %s", e)
         return {"status": "error", "message": str(e)}

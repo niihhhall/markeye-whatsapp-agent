@@ -1,77 +1,69 @@
 import re
 import random
+from app.config import settings
 
-def chunk_message(text: str) -> list:
+def chunk_message(text: str) -> list[str]:
     """
-    Cleans text and splits into multiple bubbles based on natural pauses (. ! ?).
-    Enforces 'No Dashes' rule.
+    Split LLM response into separate WhatsApp messages.
+    
+    Priority:
+    1. ||| separators (LLM outputs these)
+    2. [CHUNK] markers (legacy)
+    3. Short = single message
+    4. Long without markers = split at sentences
+    
+    HARD CAP: 3 chunks maximum. Always.
     """
+    text = text.strip()
     if not text:
-        return []
-
-    # 1. Enforce 'No Dashes' rule
+        return [text]
+    
+    # Enforce 'No Dashes' rule broadly
     text = re.sub(r'(\d+)\s*[-—]\s*(\d+)', r'\1 to \2', text)
     text = text.replace("—", ",").replace("--", ",").replace("- ", ", ").replace(" -", " ,")
     
-    # 2. Cleanup separators
-    text = text.replace("|||", " ")
+    chunks = None
     
-    # 3. Natural Sentence Splitting
-    # We split on . ! or ? followed by a space, but protect common abbreviations
-    # Common abbreviations to NOT split on
-    abbreviations = ["Mr.", "Mrs.", "Dr.", "Ms.", "e.g.", "i.e.", "vs.", "etc.", "st.", "ave."]
+    if "|||" in text:
+        chunks = [c.strip() for c in text.split("|||") if c.strip()]
+    elif "[CHUNK]" in text:
+        chunks = [c.strip() for c in text.split("[CHUNK]") if c.strip()]
+    elif len(text) <= 200:
+        return [text]
+    else:
+        chunks = _split_at_sentences(text)
     
-    # Protect abbreviations by temporary replacement
-    protected_text = text
-    for i, abbr in enumerate(abbreviations):
-        protected_text = protected_text.replace(abbr, f"__ABBR{i}__")
+    if not chunks:
+        return [text]
     
-    # Split using regex: look for . ! or ? followed by space (or end of string)
-    chunks = re.split(r'(?<=[.!?])\s+', protected_text)
+    # HARD CAP: 3 max
+    if len(chunks) > 3:
+        chunks = chunks[:2] + [" ".join(chunks[2:])]
     
-    # Restore abbreviations and clean up
-    temp_chunks = []
-    for chunk in chunks:
-        c = chunk.strip()
-        if not c:
-            continue
-        for i, abbr in enumerate(abbreviations):
-            c = c.replace(f"__ABBR{i}__", abbr)
-        temp_chunks.append(c)
-    
-    # 4. Smart Merge: Combine chunks shorter than 40 chars with the previous one
-    merged_chunks = []
-    for chunk in temp_chunks:
-        if merged_chunks and len(merged_chunks[-1]) < 40:
-            # If previous was too short, merge CURRENT into it
-            merged_chunks[-1] = merged_chunks[-1] + " " + chunk
-        elif merged_chunks and len(chunk) < 30:
-            # If current is very short, merge into PREVIOUS
-            merged_chunks[-1] = merged_chunks[-1] + " " + chunk
-        else:
-            merged_chunks.append(chunk)
+    chunks = [c for c in chunks if c.strip()]
+    return chunks if chunks else [text]
 
-    # 5. Bubble Cap: Maximum 3 bubbles
-    if len(merged_chunks) > 3:
-        # Keep first two bubbles as is
-        final_list = merged_chunks[:2]
-        # Combine everything else into the 3rd bubble
-        remaining = " ".join(merged_chunks[2:])
-        final_list.append(remaining)
-        return final_list
+def _split_at_sentences(text: str) -> list[str]:
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
     
-    return merged_chunks if merged_chunks else [text.strip()]
-
+    if len(sentences) <= 2:
+        return [text.strip()]
+    if len(sentences) <= 4:
+        mid = len(sentences) // 2
+        return [" ".join(sentences[:mid]), " ".join(sentences[mid:])]
+    
+    third = len(sentences) // 3
+    return [
+        " ".join(sentences[:third]),
+        " ".join(sentences[third:third*2]),
+        " ".join(sentences[third*2:])
+    ]
 
 def calculate_typing_delay(text: str) -> float:
-    """
-    Returns a realistic typing delay (in seconds) based on character count.
-    Used for simulating a human typing on WhatsApp.
-    """
-    # 15 chars per second (quite fast but human)
-    delay = len(text) / 15.0
-    # Cap delay at 15 seconds total for the single coherent response
-    return min(max(2.0, delay), 15.0)
+    """Realistic typing delay. 1.0s to 3.5s based on length."""
+    base = len(text) * getattr(settings, 'TYPING_DELAY_PER_CHAR', 0.03)
+    jitter = random.uniform(-0.3, 0.3)
+    return max(1.0, min(3.5, base + jitter))
 
 def calculate_reading_delay(text: str) -> float:
     """

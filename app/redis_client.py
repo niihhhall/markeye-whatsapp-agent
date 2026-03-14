@@ -62,57 +62,68 @@ class RedisClient:
             print(f"[Redis] ❌ check_dedup failed: {e}", flush=True)
             return False
 
-    async def buffer_message(self, phone: str, message: str):
-        """Adds message to input buffer list and tracks first message time."""
+    async def buffer_message(self, phone: str, message: str) -> str:
+        """Adds message to input buffer list and tracks first message time. Returns new batch_id."""
+        import uuid
         try:
             key = f"buffer:{phone}"
             first_key = f"buffer_first:{phone}"
+            batch_key = f"batch:{phone}"
             
             await self.redis.rpush(key, message)
             await self.redis.expire(key, 60)
             
             if not await self.redis.exists(first_key):
                 await self.redis.set(first_key, str(time.time()), ex=60)
+            
+            new_batch_id = str(uuid.uuid4())
+            await self.redis.set(batch_key, new_batch_id, ex=60)
                 
-            print(f"[Redis] ✅ Buffered message for {phone}", flush=True)
+            print(f"[Redis] ✅ Buffered message for {phone}, batch {new_batch_id}", flush=True)
+            return new_batch_id
         except Exception as e:
             print(f"[Redis] ❌ buffer_message failed for {phone}: {e}", flush=True)
+            return "error_batch"
 
-    async def get_and_clear_buffer(self, phone: str) -> List[str]:
-        """Returns all buffered messages and clears the buffer."""
+    async def get_and_clear_buffer(self, phone: str) -> str:
+        """Returns all buffered messages joined correctly and clears the buffer."""
         try:
             key = f"buffer:{phone}"
             first_key = f"buffer_first:{phone}"
+            batch_key = f"batch:{phone}"
             
             messages = await self.redis.lrange(key, 0, -1)
-            await self.redis.delete(key)
-            await self.redis.delete(first_key)
-            return messages
+            await self.redis.delete(key, first_key, batch_key)
+            
+            if not messages:
+                return ""
+                
+            texts = [m if isinstance(m, str) else m.decode() for m in messages]
+            return "\n".join(texts)
         except Exception as e:
             print(f"[Redis] ❌ get_and_clear_buffer failed for {phone}: {e}", flush=True)
-            return []
+            return ""
 
-    async def should_process_buffer(self, phone: str) -> bool:
-        """
-        Check if we should process the buffer now.
-        Returns True if 8 seconds have passed since the first message (hard max).
-        """
+    async def is_batch_current(self, phone: str, batch_id: str) -> bool:
+        """Check if this batch_id is still current (no new messages since)."""
         try:
-            first_key = f"buffer_first:{phone}"
-            first_ts = await self.redis.get(first_key)
-            
+            current = await self.redis.get(f"batch:{phone}")
+            if not current:
+                return False
+            return current == batch_id
+        except Exception as e:
+            print(f"[Redis] ❌ is_batch_current failed: {e}", flush=True)
+            return False
+
+    async def has_hit_hard_max(self, phone: str) -> bool:
+        """Check if 8 seconds passed since first message in batch."""
+        try:
+            first_ts = await self.redis.get(f"buffer_first:{phone}")
             if not first_ts:
                 return False
-            
-            first_time = float(first_ts)
-            now = time.time()
-            
-            if now - first_time >= settings.INPUT_BUFFER_MAX_SECONDS:
-                return True
-            
-            return False
+            return (time.time() - float(first_ts)) >= settings.INPUT_BUFFER_MAX_SECONDS
         except Exception as e:
-            print(f"[Redis] ❌ should_process_buffer failed for {phone}: {e}", flush=True)
+            print(f"[Redis] ❌ has_hit_hard_max failed: {e}", flush=True)
             return False
 
     async def set_batch_id(self, phone: str, batch_id: str):
@@ -129,6 +140,33 @@ class RedisClient:
             await self.redis.set(f"processing:{phone}", "1", ex=60)
         else:
             await self.redis.delete(f"processing:{phone}")
+
+    # ═══ GENERATION TRACKING (for interrupt) ═══
+    async def set_generating(self, phone: str):
+        try:
+            await self.redis.set(f"generating:{phone}", "1", ex=120)
+        except Exception as e:
+            print(f"[Redis] ❌ set_generating failed: {e}", flush=True)
+
+    async def clear_generating(self, phone: str):
+        try:
+            await self.redis.delete(f"generating:{phone}")
+        except Exception as e:
+            print(f"[Redis] ❌ clear_generating failed: {e}", flush=True)
+
+    async def is_generating(self, phone: str) -> bool:
+        try:
+            return await self.redis.exists(f"generating:{phone}") > 0
+        except Exception as e:
+            print(f"[Redis] ❌ is_generating failed: {e}", flush=True)
+            return False
+
+    async def has_new_messages_during_generation(self, phone: str) -> bool:
+        try:
+            return await self.redis.llen(f"buffer:{phone}") > 0
+        except Exception as e:
+            print(f"[Redis] ❌ has_new_messages_during_generation failed: {e}", flush=True)
+            return False
 
     async def lrange(self, key: str, start: int, stop: int) -> List[str]:
         """Expose lrange from underlying redis."""
