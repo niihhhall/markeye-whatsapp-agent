@@ -45,7 +45,7 @@ class RedisClient:
                 }
             
             session["history"].append({"role": role, "content": content})
-            session["history"] = session["history"][-20:]
+            session["history"] = session["history"][-100:]
             await self.save_session(phone, session)
         except Exception as e:
             print(f"[Redis] ❌ add_to_history failed for {phone}: {e}", flush=True)
