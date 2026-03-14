@@ -52,10 +52,12 @@ def _split_at_sentences(sentences: list[str]) -> list[str]:
     if not sentences:
         return []
     
-    if len(sentences) <= 2:
+    # If 1, 2, or 3 sentences, just send them as individual messages
+    if len(sentences) <= 3:
         return sentences
     
-    if len(sentences) <= 4:
+    # If 4 or 5 sentences, split in half
+    if len(sentences) <= 5:
         mid = len(sentences) // 2
         return [" ".join(sentences[:mid]), " ".join(sentences[mid:])]
     
@@ -67,10 +69,11 @@ def _split_at_sentences(sentences: list[str]) -> list[str]:
     ]
 
 def calculate_typing_delay(text: str) -> float:
-    """Realistic typing delay. 1.0s to 3.5s based on length."""
-    base = len(text) * getattr(settings, 'TYPING_DELAY_PER_CHAR', 0.03)
-    jitter = random.uniform(-0.3, 0.3)
-    return max(1.0, min(3.5, base + jitter))
+    """Realistic typing delay. 2.0s to 5.0s based on length."""
+    # Slower typing speed and higher baseline for realism
+    base = len(text) * getattr(settings, 'TYPING_DELAY_PER_CHAR', 0.04)
+    jitter = random.uniform(-0.2, 0.6)
+    return max(2.0, min(5.0, base + jitter))
 
 def calculate_reading_delay(text: str) -> float:
     """
