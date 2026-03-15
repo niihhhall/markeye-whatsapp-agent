@@ -1,11 +1,18 @@
-from supabase.client import create_client, Client
+from supabase import create_client, Client
+from supabase.client import ClientOptions
 from app.config import settings
 from typing import Optional, Dict, Any
 
 class SupabaseClient:
     def __init__(self):
-        # We'll use the client directly, but individual calls will be awaited
-        self.client: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
+        # supabase-py v2 uses the same create_client but we should ensure we use it in an async context
+        # Actually, if we want truly async we should use AsyncClient
+        from supabase import AsyncClient, create_client
+        self.client: AsyncClient = create_client(
+            settings.SUPABASE_URL, 
+            settings.SUPABASE_SERVICE_KEY,
+            options=ClientOptions(postgrest_client_timeout=10)
+        )
 
     async def create_lead(self, name: str, phone: str, company: str) -> Dict[str, Any]:
         """Inserts into leads table."""
