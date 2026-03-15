@@ -1,4 +1,5 @@
 import os
+from typing import List
 from openai import AsyncOpenAI
 from app.supabase_client import supabase_client
 from app.config import settings
@@ -22,7 +23,8 @@ async def retrieve_knowledge(query: str, threshold: float = 0.4, limit: int = 3)
         query_vec = await get_query_embedding(query)
 
         # 2. Call the RPC function we created in Supabase
-        result = await supabase_client.client.rpc(
+        client = await supabase_client.get_client()
+        result = await client.rpc(
             "match_knowledge",
             {
                 "query_embedding": query_vec,
