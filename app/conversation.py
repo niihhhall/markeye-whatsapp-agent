@@ -261,9 +261,9 @@ async def build_enhanced_context(session: dict, lead_data: dict, message: str, k
     # 2. Base Instruction (BANT + Action)
     instruction = f"\n\nCURRENT BANT STATUS: Score {overall_score}/10. Action: {recommended_action}.\n"
     if recommended_action == "continue_discovery" or overall_score < 7:
-        instruction += "INSTRUCTION: Do NOT suggest a call yet. Keep discovering. You need more information.\n"
+        instruction += "INSTRUCTION: Maintain Chat Mode. Use SPIN questions only if they flow naturally. Do NOT force discovery.\n"
     elif overall_score >= 7:
-        instruction += "INSTRUCTION: Lead is qualified. Suggest a call with Louis when the moment feels natural.\n"
+        instruction += "INSTRUCTION: Lead is qualified. Suggest a call with Louis when the moment feels natural. Suggest it as a logical next step to solve their problem.\n"
     
     # 3. Dynamic Approach Instruction
     instruction += approach + "\n"
