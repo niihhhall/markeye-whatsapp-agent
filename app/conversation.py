@@ -18,6 +18,7 @@ tracker = AlbertTracker()
 
 from datetime import datetime, timezone
 import random
+from app.signals import detect_interest_level, detect_personality_type, get_approach_instructions
 
 async def process_conversation(phone: str, message: str, conversation_id: str = "", message_id: str = ""):
     """Main conversation engine logic."""
@@ -246,22 +247,28 @@ async def build_enhanced_context(session: dict, lead_data: dict, message: str, k
     # We will let the placeholders in system_prompt.txt handle it,
     # but we can add an extra "INSTRUCTION" block here for dynamic guidance.
     
+    # Qualification signaling
     bant_scores = session.get("bant_scores", {})
     overall_score = bant_scores.get("overall_score", 0)
     recommended_action = bant_scores.get("recommended_action", "continue_discovery")
     
-    # Qualification signaling
-    has_signals = False
-    if lead_data.get("lead_source") and lead_data.get("industry") and session.get("turn_count", 0) > 2:
-        has_signals = True # Simplification for logic
+    # 1. Detect Buyer Signals and Personality
+    interest = detect_interest_level(message)
+    user_history = [m["content"] for m in session.get("history", []) if m["role"] == "user"]
+    personality = detect_personality_type(user_history)
+    approach = get_approach_instructions(interest, personality)
 
+    # 2. Base Instruction (BANT + Action)
     instruction = f"\n\nCURRENT BANT STATUS: Score {overall_score}/10. Action: {recommended_action}.\n"
     if recommended_action == "continue_discovery" or overall_score < 7:
         instruction += "INSTRUCTION: Do NOT suggest a call yet. Keep discovering. You need more information.\n"
     elif overall_score >= 7:
         instruction += "INSTRUCTION: Lead is qualified. Suggest a call with Louis when the moment feels natural.\n"
     
-    # Inject Form context (Issue 9)
+    # 3. Dynamic Approach Instruction
+    instruction += approach + "\n"
+    
+    # 4. Inject Form context (Issue 9)
     form_keys = ["name", "email", "company", "industry", "message", "lead_source", "website", "company_size", "role"]
     form_details = []
     for k in form_keys:
