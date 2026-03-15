@@ -121,11 +121,19 @@ class LLMClient:
 
     async def build_context(self, session: Dict[str, Any], lead_data: Dict[str, Any], message: str, knowledge_context: str = "") -> List[Dict[str, str]]:
         """Builds the full LLM context."""
-        prompt_path = os.path.join(os.getcwd(), "prompts", "system_prompt.txt")
-        with open(prompt_path, "r", encoding="utf-8") as f:
-            system_prompt = f.read()
+        if not settings.USE_DYNAMIC_PROMPTING:
+            # LEGACY MODE: Load everything from one file
+            prompt_path = os.path.join(os.getcwd(), "prompts", "system_prompt.txt")
+            with open(prompt_path, "r", encoding="utf-8") as f:
+                system_prompt = f.read()
+        else:
+            # DYNAMIC MODE: Start with Core and inject what's needed
+            # (To be implemented in next steps)
+            prompt_path = os.path.join(os.getcwd(), "prompts", "system_prompt.txt")
+            with open(prompt_path, "r", encoding="utf-8") as f:
+                system_prompt = f.read()
 
-        # Inject RAG context if available
+        # Inject RAG context if available (Standard RAG)
         if knowledge_context:
             rag_block = f"\n\n### KNOWLEDGE BASE CONTEXT (USE THIS TO ANSWER DISCOVERY QUESTIONS):\n{knowledge_context}\n\n"
             system_prompt = rag_block + system_prompt

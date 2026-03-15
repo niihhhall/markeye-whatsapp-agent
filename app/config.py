@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     # Human-like Behavior
     MARK_AS_READ_DELAY: float = 2.0
     SHOW_TYPING_INDICATOR: bool = True
+    USE_DYNAMIC_PROMPTING: bool = os.getenv("USE_DYNAMIC_PROMPTING", "False").lower() == "true"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
