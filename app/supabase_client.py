@@ -1,3 +1,4 @@
+import asyncio
 from supabase import create_client, Client
 from supabase.client import ClientOptions
 from app.config import settings
