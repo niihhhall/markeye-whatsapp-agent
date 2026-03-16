@@ -27,7 +27,8 @@ class RedisClient:
 
     async def save_session(self, phone: str, session: Dict[str, Any]):
         try:
-            await self.redis.set(f"session:{phone}", json.dumps(session), ex=86400)
+            # Persistent memory: 7 days TTL
+            await self.redis.set(f"session:{phone}", json.dumps(session), ex=604800)
             print(f"[Redis] ✅ Session saved for {phone}", flush=True)
         except Exception as e:
             print(f"[Redis] ❌ save_session failed for {phone}: {e}", flush=True)
