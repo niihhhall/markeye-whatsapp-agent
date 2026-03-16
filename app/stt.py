@@ -19,7 +19,7 @@ async def process_voice_note_from_media_id(media_id: str) -> str | None:
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(
-                f"https://graph.facebook.com/v21.0/{media_id}",
+                f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}/{media_id}",
                 headers={"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}"}
             )
             if resp.status_code != 200:

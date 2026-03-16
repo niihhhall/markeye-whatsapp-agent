@@ -6,7 +6,7 @@ from app.chunker import calculate_typing_delay
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = f"https://graph.facebook.com/v21.0/{settings.WHATSAPP_PHONE_NUMBER_ID}"
+BASE_URL = f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}/{settings.WHATSAPP_PHONE_NUMBER_ID}"
 
 
 def _headers() -> dict:

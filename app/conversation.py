@@ -80,7 +80,7 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
             await tracker.set_typing_status(lead_id, True)
 
         # Step 6: Set processing flag
-        await redis_client.set_processing(phone, True)
+        await redis_client.set_generating(phone)
 
         # Step 7: Check if message is low-content spam
         is_spam = await check_low_content(phone, message, session)
