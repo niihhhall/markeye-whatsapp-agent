@@ -46,7 +46,7 @@ async def send_initial_outreach(name: str, phone_raw: str, company: str, form_da
         first_message_content = f"Hey {name}, Albert here|||just saw you checked out the demo for {company} and wanted to say hey|||any questions on how it all works tbh"
         
         # 4. Attempt Template Outreach (Highly Recommended for WhatsApp Cloud API)
-        template_name = "after5_outreach"
+        template_name = "after5_outreach_2"
         components = [
             {
                 "type": "body",
