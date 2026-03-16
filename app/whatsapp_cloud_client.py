@@ -78,6 +78,45 @@ async def send_message(to: str, body: str) -> dict | None:
         logger.error("WhatsApp Cloud send error: %s", exc)
         return None
 
+async def send_template_message(to: str, template_name: str, language_code: str = "en_US", components: list = None) -> dict | None:
+    """
+    Send a WhatsApp template message.
+    Required for initial outreach to new leads.
+    """
+    cloud_phone = _to_cloud_phone(to)
+    url = f"{BASE_URL}/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
+    
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": cloud_phone,
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {"code": language_code}
+        }
+    }
+    
+    if components:
+        payload["template"]["components"] = components
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            logger.info("WhatsApp Cloud: sending template %s to %s", template_name, cloud_phone)
+            response = await client.post(
+                url,
+                headers=_get_headers(),
+                json=payload,
+            )
+            if response.status_code in (200, 201, 202):
+                logger.info("WhatsApp Cloud: template sent to %s", cloud_phone)
+                return response.json()
+            else:
+                logger.error("WhatsApp Cloud template failed: %s - %s", response.status_code, response.text)
+                return None
+    except Exception as exc:
+        logger.error("WhatsApp Cloud template error: %s", exc)
+        return None
+
 async def mark_as_read(message_id: str) -> bool:
     """
     Mark a WhatsApp message as read via Cloud API.
