@@ -244,9 +244,7 @@ async def check_and_send_calendly(phone: str, text: str, session: dict) -> str:
     if calendly_link in text:
         if await redis_client.has_sent_calendly(phone):
             logger.info("[Conversation] Calendly already sent to %s. Removing from response.", phone)
-            # Remove the link and optionally the sentence containing it if it's chunked.
-            # But simpler: just replace the link with the reminder phrase.
-            text = text.replace(calendly_link, "[link already sent above]")
+            text = text.replace(calendly_link, "the link's still there whenever you're ready")
         else:
             await redis_client.mark_calendly_sent(phone)
             logger.info("[Conversation] Tracking Calendly link sent to %s", phone)
