@@ -18,36 +18,39 @@ def chunk_message(text: str) -> list[str]:
     elif "[CHUNK]" in text:
         chunks = [c.strip() for c in text.split("[CHUNK]") if c.strip()]
     else:
-        # 2. Human-like logic: First sentence separation
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        if len(sentences) > 1:
-            first_sent = sentences[0].strip()
-            # If first sentence is an acknowledgment (short), make it the first bubble
-            if len(first_sent) < 100:
-                chunks = [first_sent, " ".join(sentences[1:]).strip()]
+        # 2. Human logic: Split at every punctuation (., ?, !)
+        # But try to keep chunks reasonably sized (don't split "Hi. How are you?" into two if it's too tiny)
+        raw_chunks = re.split(r'(?<=[.!?])\s+', text)
+        chunks = []
+        current_chunk = ""
+        
+        for rc in raw_chunks:
+            rc = rc.strip()
+            if not rc: continue
+            
+            # If current_chunk is empty, start it
+            if not current_chunk:
+                current_chunk = rc
+            # If current_chunk is already "full enough" (e.g. > 100-150 chars), start new bubble
+            # OR if it ends with ? or ! (highly prioritized split points for impact)
+            elif len(current_chunk) > 120 or current_chunk.endswith('?') or current_chunk.endswith('!'):
+                chunks.append(current_chunk)
+                current_chunk = rc
+            # Otherwise, merge short sentences together (human behavior)
             else:
-                chunks = _split_at_sentences(text)
-        else:
-            chunks = [text]
+                current_chunk += f" {rc}"
+        
+        if current_chunk:
+            chunks.append(current_chunk)
 
     # Clean up chunks
     chunks = [c.strip() for c in chunks if c.strip()]
 
-    # HARD CAP: 3 chunks maximum
-    if len(chunks) > 3:
-        chunks = chunks[:2] + [" ".join(chunks[2:])]
+    # HARD CAP: 5 chunks maximum (user wants more bubbles)
+    if len(chunks) > 5:
+        chunks = chunks[:4] + [" ".join(chunks[4:])]
     
     return chunks or [text]
-
-
-def _split_at_sentences(text: str) -> list[str]:
-    """Force split into 2 chunks if long enough, otherwise keep together."""
-    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
-    if len(text) < 400 or len(sentences) <= 1:
-        return [text.strip()]
-        
-    mid = len(sentences) // 2
-    return [" ".join(sentences[:mid]), " ".join(sentences[mid:])]
 
 
 def calculate_typing_delay(text: str) -> float:

@@ -266,7 +266,8 @@ async def _process_with_interrupt_protection(
             pass
 
         # 2. Mark as read (Handled in webhook instantly now)
-        pass
+        last_msg_id_val = await redis_client.redis.get(f"last_msg_id:{phone}")
+        last_msg_id = last_msg_id_val.decode('utf-8') if isinstance(last_msg_id_val, bytes) else (last_msg_id_val or "")
         
         # 3. Mark generation in progress
         await redis_client.set_generating(phone)
