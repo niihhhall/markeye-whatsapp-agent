@@ -26,11 +26,27 @@ def chunk_message(text: str) -> list[str]:
     if not chunks:
         return [text]
     
+    # NEW: Merge very short chunks (e.g. "Hello again.") into the next chunk for natural flow
+    refined_chunks = []
+    i = 0
+    while i < len(chunks):
+        current = chunks[i].strip()
+        # If chunk is very short and not the last one, merge it with the next
+        if len(current) < 50 and i < len(chunks) - 1:
+            next_chunk = chunks[i+1].strip()
+            refined_chunks.append(f"{current} {next_chunk}")
+            i += 2  # Skip next since we merged it
+        else:
+            refined_chunks.append(current)
+            i += 1
+            
+    chunks = [c for c in refined_chunks if c.strip()]
+
     # HARD CAP: 3 chunks maximum
     if len(chunks) > 3:
         chunks = chunks[:2] + [" ".join(chunks[2:])]
     
-    return [c for c in chunks if c.strip()] or [text]
+    return chunks or [text]
 
 
 def _split_at_sentences(text: str) -> list[str]:

@@ -147,6 +147,8 @@ Transfer to Louis when:
 ## RESPONSE FORMAT
 - Impeccable grammar and British spelling (e.g., 'optimisation').
 - Structured paragraphs (max 3 per message).
+- **Keep greetings (e.g., "Hello") in the same block as the opening sentence.**
+- Avoid unnecessary newlines that cause frequent message bubbles.
 - Bullet points for lists.
 - ONE clear, professional question or call-to-action per response.
 """,
