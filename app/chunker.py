@@ -12,35 +12,23 @@ def chunk_message(text: str) -> list[str]:
     if not text:
         return [text]
     
-    chunks = None
+    # NEW HUMAN-LIKE LOGIC:
+    # 1. Look for a natural first sentence (acknowledgment/greeting)
+    sentences = re.split(r'(?<=[.!?])\s+', text)
     
-    if "|||" in text:
-        chunks = [c.strip() for c in text.split("|||") if c.strip()]
-    elif "[CHUNK]" in text:
-        chunks = [c.strip() for c in text.split("[CHUNK]") if c.strip()]
-    elif len(text) <= 200:
-        return [text]
-    else:
-        chunks = _split_at_sentences(text)
-    
-    if not chunks:
-        return [text]
-    
-    # NEW: Merge very short chunks (e.g. "Hello again.") into the next chunk for natural flow
-    refined_chunks = []
-    i = 0
-    while i < len(chunks):
-        current = chunks[i].strip()
-        # If chunk is very short and not the last one, merge it with the next
-        if len(current) < 50 and i < len(chunks) - 1:
-            next_chunk = chunks[i+1].strip()
-            refined_chunks.append(f"{current} {next_chunk}")
-            i += 2  # Skip next since we merged it
+    if len(sentences) > 1:
+        first_sent = sentences[0].strip()
+        # If first sentence is an acknowledgment (short), make it the first bubble
+        if len(first_sent) < 100:
+            chunks = [first_sent, " ".join(sentences[1:]).strip()]
         else:
-            refined_chunks.append(current)
-            i += 1
-            
-    chunks = [c for c in refined_chunks if c.strip()]
+            # Fallback to standard splitting
+            chunks = _split_at_sentences(text)
+    else:
+        chunks = [text]
+
+    # Clean up chunks
+    chunks = [c.strip() for c in chunks if c.strip()]
 
     # HARD CAP: 3 chunks maximum
     if len(chunks) > 3:
@@ -50,21 +38,24 @@ def chunk_message(text: str) -> list[str]:
 
 
 def _split_at_sentences(text: str) -> list[str]:
+    """Force split into 2 chunks if long enough, otherwise keep together."""
     sentences = re.split(r'(?<=[.!?])\s+', text.strip())
-    if len(sentences) <= 2:
+    if len(text) < 400 or len(sentences) <= 1:
         return [text.strip()]
-    if len(sentences) <= 4:
-        mid = len(sentences) // 2
-        return [" ".join(sentences[:mid]), " ".join(sentences[mid:])]
-    third = len(sentences) // 3
-    return [
-        " ".join(sentences[:third]),
-        " ".join(sentences[third:third*2]),
-        " ".join(sentences[third*2:])
-    ]
+        
+    mid = len(sentences) // 2
+    return [" ".join(sentences[:mid]), " ".join(sentences[mid:])]
 
 
 def calculate_typing_delay(text: str) -> float:
-    base = len(text) * getattr(settings, 'TYPING_DELAY_PER_CHAR', 0.03)
-    jitter = random.uniform(-0.3, 0.3)
-    return max(1.0, min(3.5, base + jitter))
+    """Calculate delay based on typing speed (approx 250 characters per minute)."""
+    # 250 CPM = 4.16 chars per second -> ~0.24s per char
+    # We'll use a slightly faster but variable baseline
+    words = len(text.split())
+    base = words * 0.4  # Approx 0.4s per word
+    char_base = len(text) * 0.05
+    
+    total = (base + char_base) / 2
+    jitter = random.uniform(-0.5, 0.5)
+    
+    return max(1.5, min(5.0, total + jitter))

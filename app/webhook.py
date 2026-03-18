@@ -4,7 +4,7 @@ import random
 from fastapi import APIRouter, Request, Response, BackgroundTasks
 from app.config import settings
 from app.redis_client import redis_client
-from app.whatsapp_client import mark_as_read, send_message, send_chunked_messages
+from app.messaging import mark_as_read, send_message, send_chunked_messages
 from app.models import ConversationState
 from app.stt import process_voice_note_from_media_id
 
@@ -262,11 +262,10 @@ async def _process_with_interrupt_protection(
             # We'll skip complex cooldown check here and let conversation engine handle or just reject.
             pass
 
-        # 2. Mark as read (blue ticks)
-        last_msg_id = await redis_client.redis.get(f"last_msg_id:{phone}")
         if last_msg_id:
-            await asyncio.sleep(random.uniform(1, 3))
-            await mark_as_read(last_msg_id)
+            await asyncio.sleep(random.uniform(1, 4))
+            # conversation_id not strictly needed for Cloud but required by proxy
+            await mark_as_read("", last_msg_id) 
         
         # 3. Mark generation in progress
         await redis_client.set_generating(phone)

@@ -47,9 +47,9 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
         print(f"[Conversation] ⏳ Waiting 5s before read receipt for {phone}", flush=True)
         await asyncio.sleep(5)
         
-        # 2. Read Receipt (blue ticks)
         if message_id:
-            print(f"[Conversation] ✅ Sending blue ticks for {phone}", flush=True)
+            logger.info(f"[Conversation] ✅ Sending blue ticks for {phone}")
+            await mark_as_read(conversation_id, message_id)
         # 5s buffer (rolling) + 1-2s here = 6-7s total before typing start
         extra_pause = random.uniform(1, 2)
         print(f"[Conversation] ⏳ Waiting {extra_pause:.1f}s before typing start", flush=True)
