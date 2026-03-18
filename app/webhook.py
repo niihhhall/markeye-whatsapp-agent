@@ -161,10 +161,13 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
 
         # === BUFFER THE MESSAGE — DON'T PROCESS YET ===
         batch_id = await redis_client.buffer_message(sender_phone, message_text)
-        
         # Store last message_id and sender_name for processing
         await redis_client.redis.set(f"last_msg_id:{sender_phone}", message_id, ex=300)
         await redis_client.redis.set(f"last_name:{sender_phone}", sender_name, ex=300)
+
+        # 5. Instant Blue Tick (Master UX)
+        # We mark as read immediately so user knows we received it
+        background_tasks.add_task(mark_as_read, "", message_id)
         
         # Fire delayed processor (3s rolling timer)
         background_tasks.add_task(_delayed_buffer_process, sender_phone, batch_id)
@@ -262,14 +265,8 @@ async def _process_with_interrupt_protection(
             # We'll skip complex cooldown check here and let conversation engine handle or just reject.
             pass
 
-        # 2. Mark as read (blue ticks)
-        last_msg_id_val = await redis_client.redis.get(f"last_msg_id:{phone}")
-        last_msg_id = last_msg_id_val.decode('utf-8') if isinstance(last_msg_id_val, bytes) else (last_msg_id_val or "")
-        
-        if last_msg_id:
-            await asyncio.sleep(random.uniform(1, 4))
-            # conversation_id not strictly needed for Cloud but required by proxy
-            await mark_as_read("", last_msg_id) 
+        # 2. Mark as read (Handled in webhook instantly now)
+        pass
         
         # 3. Mark generation in progress
         await redis_client.set_generating(phone)

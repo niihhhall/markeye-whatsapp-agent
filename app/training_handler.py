@@ -95,12 +95,10 @@ class TrainingHandler:
                 "ideal_response": parsed["ideal_response"],
                 "priority": parsed.get("priority", 5),
                 "is_active": True,
-                "metadata": {
-                    "subcategory": parsed.get("subcategory"),
-                    "trigger_keywords": parsed.get("trigger_keywords", []),
-                    "added_by": phone,
-                    "notes": parsed.get("notes")
-                }
+                "subcategory": parsed.get("subcategory"),
+                "trigger_keywords": parsed.get("trigger_keywords", []),
+                "added_by": phone,
+                "notes": parsed.get("notes")
             }
 
             result = await client.table("dynamic_training").insert(entry).execute()

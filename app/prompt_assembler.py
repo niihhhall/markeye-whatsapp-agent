@@ -291,7 +291,7 @@ class PromptAssembler:
             # Fetch from Supabase
             client = await supabase_client.get_client()
             result = await client.table("dynamic_training") \
-                .select("category,scenario,ideal_response,priority,metadata") \
+                .select("category,scenario,ideal_response,priority,subcategory,trigger_keywords") \
                 .eq("is_active", True) \
                 .order("priority", desc=True) \
                 .execute()
@@ -416,7 +416,7 @@ class PromptAssembler:
         try:
             client = await supabase_client.get_client()
             results = await client.table("dynamic_training") \
-                .select("scenario,ideal_response,metadata") \
+                .select("scenario,ideal_response,subcategory,trigger_keywords") \
                 .eq("category", "qna") \
                 .eq("is_active", True) \
                 .ilike("scenario", f"%{keywords[0]}%") \

@@ -48,8 +48,10 @@ async def send_message(to: str, body: str) -> dict | None:
 async def send_chunked_messages(to: str, chunks: list[str], conversation_id: str = "", message_id: str = "") -> None:
     """Send multiple messages with realistic typing delays and interrupt check."""
     from app.redis_client import redis_client
-    for i, chunk in enumerate(chunks):
-        # 1. Thinking/Typing Delay
+        # 1. Start Typing Indicator
+        await send_typing_indicator(to)
+
+        # 2. Thinking/Typing Delay
         if i == 0:
             # First bubble delay (thinking)
             delay = random.uniform(2.0, 4.0)
@@ -57,14 +59,18 @@ async def send_chunked_messages(to: str, chunks: list[str], conversation_id: str
             # Subsequent bubble delay (typing)
             delay = calculate_typing_delay(chunk)
             
-        # Simulate typing/thinking period
-        intervals = int(delay / 0.5)
-        for _ in range(intervals):
-            await asyncio.sleep(0.5)
+        # Simulate typing/thinking period - refresh typing every 10s if long
+        intervals = int(delay / 1.0) # Check every second
+        for sec in range(intervals):
+            await asyncio.sleep(1.0)
+            # Refresh typing indicator if we've waited more than 10s (Meta expires it at 25s)
+            if sec > 0 and sec % 10 == 0:
+                await send_typing_indicator(to)
+            
             if await redis_client.has_new_messages(to):
                 logger.info(f"Interrupt: New message during delay for {to}. Aborting.")
                 return
-        await asyncio.sleep(delay % 0.5)
+        await asyncio.sleep(delay % 1.0)
             
         await send_message(to, chunk)
 
@@ -98,12 +104,26 @@ async def send_template_message(to: str, template_name: str, language_code: str 
 
 
 async def send_typing_indicator(to: str, message_id: str = "") -> bool:
-    """Send a typing indicator (simulated via read status if needed, but Cloud API doesn't have a direct 'typing' status like others, often handled via 'read' status for the last message or just ignored). Actually, some versions have it."""
-    # Note: WhatsApp Cloud API doesn't officially support a 'typing' status in the same way as some other providers
-    # but we'll leave the placeholder if the user expects it. 
-    # For now, we'll just log it.
-    logger.info(f"Simulating typing indicator for {to}")
-    return True
+    """Send a typing indicator using sender_action."""
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": _to_wa_phone(to),
+        "sender_action": "typing_on"
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(f"{BASE_URL}/messages", headers=_headers(), json=payload)
+            if resp.status_code == 200:
+                logger.info(f"Typing indicator sent to {to}")
+                return True
+            else:
+                # Some accounts might not support this yet, log and continue
+                logger.info(f"Typing indicator not supported/failed: {resp.status_code} - {resp.text}")
+                return False
+    except Exception as e:
+        logger.error(f"Typing indicator error: {e}")
+        return False
 
 
 async def mark_as_read(message_id: str) -> None:
