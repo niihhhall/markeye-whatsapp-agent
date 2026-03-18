@@ -42,18 +42,9 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
             await redis_client.clear_generating(phone)
             return
 
-        # Step 4: Timing Sequence (Master Prompt Fix 5)
-        # 1. 5s pause
-        print(f"[Conversation] ⏳ Waiting 5s before read receipt for {phone}", flush=True)
-        await asyncio.sleep(5)
-        
-        if message_id:
-            logger.info(f"[Conversation] ✅ Sending blue ticks for {phone}")
-            await mark_as_read(conversation_id, message_id)
-        # 5s buffer (rolling) + 1-2s here = 6-7s total before typing start
-        extra_pause = random.uniform(1, 2)
-        print(f"[Conversation] ⏳ Waiting {extra_pause:.1f}s before typing start", flush=True)
-        await asyncio.sleep(extra_pause)
+        # Step 4: Handle Timing Sequence (Moved to webhook/client for instant feel)
+        # We skip the 5s wait here to start processing immediately.
+        # Human-like delays are handled in send_chunked_messages.
 
         # Step 4: Get session and lead data
         session = await redis_client.get_session(phone)
