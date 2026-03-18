@@ -48,6 +48,7 @@ async def send_message(to: str, body: str) -> dict | None:
 async def send_chunked_messages(to: str, chunks: list[str], conversation_id: str = "", message_id: str = "") -> None:
     """Send multiple messages with realistic typing delays and interrupt check."""
     from app.redis_client import redis_client
+    for i, chunk in enumerate(chunks):
         # 1. Start Typing Indicator
         await send_typing_indicator(to)
 
