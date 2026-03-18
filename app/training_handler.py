@@ -91,8 +91,8 @@ class TrainingHandler:
             client = await supabase_client.get_client()
             entry = {
                 "category": category,
-                "trigger": parsed["scenario"],
-                "response": parsed["ideal_response"],
+                "scenario": parsed["scenario"],
+                "ideal_response": parsed["ideal_response"],
                 "priority": parsed.get("priority", 5),
                 "is_active": True,
                 "metadata": {
@@ -188,7 +188,7 @@ class TrainingHandler:
         
         lines = [f"📋 Training Entries{f' ({category})' if category else ''}:"]
         for e in result.data:
-            lines.append(f"• [{e['id'][:8]}] {e['category']}: {e.get('trigger', '')[:40]}...")
+            lines.append(f"• [{e['id'][:8]}] {e['category']}: {e.get('scenario', '')[:40]}...")
         return "\n".join(lines)
 
     async def _handle_delete(self, message: str) -> str:

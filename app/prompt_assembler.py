@@ -291,7 +291,7 @@ class PromptAssembler:
             # Fetch from Supabase
             client = await supabase_client.get_client()
             result = await client.table("dynamic_training") \
-                .select("category,trigger,response,priority,metadata") \
+                .select("category,scenario,ideal_response,priority,metadata") \
                 .eq("is_active", True) \
                 .order("priority", desc=True) \
                 .execute()
@@ -344,17 +344,17 @@ class PromptAssembler:
             lines.append("Guidelines from training:")
             for entry in entries[:5]:  # Max 5 entries per module
                 if entry.get("notes"):
-                    lines.append(f"- {entry.get('trigger', 'General')}: {entry.get('response', '')}")
+                    lines.append(f"- {entry.get('scenario', 'General')}: {entry.get('ideal_response', '')}")
                     lines.append(f"  Note: {entry['notes']}")
                 else:
-                    lines.append(f"- {entry.get('trigger', 'General')}: {entry.get('response', '')}")
+                    lines.append(f"- {entry.get('scenario', 'General')}: {entry.get('ideal_response', '')}")
 
         # For technique-based modules — show patterns
         elif train_cat in ("objection", "closing", "sales", "recovery"):
             lines.append("Learned patterns:")
             for entry in entries[:6]:
-                lines.append(f"\nScenario: \"{entry.get('trigger', '')}\"")
-                lines.append(f"Response approach: \"{entry.get('response', '')}\"")
+                lines.append(f"\nScenario: \"{entry.get('scenario', '')}\"")
+                lines.append(f"Response approach: \"{entry.get('ideal_response', '')}\"")
                 if entry.get("notes"):
                     lines.append(f"Technique: {entry['notes']}")
 
@@ -363,14 +363,14 @@ class PromptAssembler:
             lines.append("Active rules:")
             for entry in entries[:5]:
                 sub = f" ({entry.get('subcategory', '')})" if entry.get("subcategory") else ""
-                lines.append(f"- {entry.get('trigger', '')}{sub}: {entry.get('response', '')}")
+                lines.append(f"- {entry.get('scenario', '')}{sub}: {entry.get('ideal_response', '')}")
 
         # For context — show latest updates
         elif train_cat == "context":
             lines.append("Latest updates:")
             for entry in entries[:5]:
-                lines.append(f"- {entry.get('trigger', '')}")
-                lines.append(f"  Impact: {entry.get('response', '')}")
+                lines.append(f"- {entry.get('scenario', '')}")
+                lines.append(f"  Impact: {entry.get('ideal_response', '')}")
                 if entry.get("notes"):
                     lines.append(f"  {entry['notes']}")
 
@@ -379,12 +379,12 @@ class PromptAssembler:
             for entry in entries[:4]:
                 ptype = entry.get("subcategory", "general")
                 lines.append(f"\n{ptype.upper()} customer:")
-                lines.append(f"- Approach: {entry['ideal_response']}")
+                lines.append(f"- Approach: {entry.get('ideal_response', '')}")
 
         # Generic fallback
         else:
             for entry in entries[:5]:
-                lines.append(f"- {entry.get('trigger', 'General')}: {entry.get('response', '')}")
+                lines.append(f"- {entry.get('scenario', 'General')}: {entry.get('ideal_response', '')}")
 
         # Add base module content as fallback guidelines
         base_content = BASE_MODULES.get(module_key, "")
@@ -416,10 +416,10 @@ class PromptAssembler:
         try:
             client = await supabase_client.get_client()
             results = await client.table("dynamic_training") \
-                .select("trigger,response,metadata") \
+                .select("scenario,ideal_response,metadata") \
                 .eq("category", "qna") \
                 .eq("is_active", True) \
-                .ilike("trigger", f"%{keywords[0]}%") \
+                .ilike("scenario", f"%{keywords[0]}%") \
                 .order("priority", desc=True) \
                 .limit(3) \
                 .execute()
@@ -432,8 +432,8 @@ class PromptAssembler:
 
         lines = ["\n## RELEVANT Q&A (from training)"]
         for entry in results.data:
-            lines.append(f"\nQ: {entry.get('trigger', '')}")
-            lines.append(f"A: {entry.get('response', '')}")
+            lines.append(f"\nQ: {entry.get('scenario', '')}")
+            lines.append(f"A: {entry.get('ideal_response', '')}")
 
         lines.append("\nNote: Adapt these answers naturally. Don't copy word-for-word.")
         return "\n".join(lines)
