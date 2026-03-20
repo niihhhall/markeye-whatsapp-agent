@@ -260,10 +260,22 @@ class LLMClient:
         else:
             formatted_history = "(no conversation yet)"
 
+        # Basic logic for scoring_status based on current state
+        current_state_val = session.get("state", "opening")
+        if current_state_val == "booking_push":
+            scoring_status = "push_for_booking"
+        elif current_state_val == "escalation":
+            scoring_status = "escalate_to_human"
+        else:
+            scoring_status = "continue_discovery"
+
         replacements = {
             "{{lead_name}}": lead_data.get("name", lead_data.get("first_name", "there")),
             "{{lead_company}}": lead_data.get("company", "your company"),
-            "{{current_state}}": session.get("state", "opening"),
+            "{{lead_industry}}": lead_data.get("industry", "their industry"),
+            "{{lead_company_summary}}": lead_data.get("form_message", ""),
+            "{{current_state}}": current_state_val,
+            "{{scoring_status}}": scoring_status,
             "{{calendly_link}}": settings.CALENDLY_LINK,
             "{{bant_scores}}": str(session.get("bant_scores", {})),
             "{{current_datetime}}": current_datetime,
