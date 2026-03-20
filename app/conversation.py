@@ -50,12 +50,12 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
             import re
             logger.info("[Conversation] 🧪 Processing Simulation data from %s: %s", phone, message)
             
-            # Robust extraction using Regex
-            name_m = re.search(r'(?:Name|Naam)\s*[–-]\s*([^\n,]+)', message, re.I)
-            comp_m = re.search(r'(?:Company|Agency|Business)(?:\s+name)?\s*[–-]\s*([^\n,]+)', message, re.I)
-            ind_m = re.search(r'(?:Industry|Field|Sector)\s*[–-]\s*([^\n,]+)', message, re.I)
+            # Robust extraction using Regex (Look for start of lines or labels)
+            name_m = re.search(r'Name\s*[–-]\s*([^\n,]+)', message, re.I)
+            comp_m = re.search(r'Company(?:\s+name)?\s*[–-]\s*([^\n,]+)', message, re.I)
+            ind_m = re.search(r'Industry\s*[–-]\s*([^\n,]+)', message, re.I)
 
-            name = name_m.group(1).strip() if name_m else "there"
+            name = name_m.group(1).strip() if name_m else "Nihal"
             company = comp_m.group(1).strip() if comp_m else "Horizon Estates"
             industry = ind_m.group(1).strip() if ind_m else "Real Estate"
 
@@ -86,7 +86,7 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
             session["sim_collecting"] = False
             await redis_client.save_session(phone, session)
             
-            await send_message(phone, f"Perfect! I've updated your details to **{name}** from **{company}**. 🚀\n\nOutbound simulation starting in 15 seconds. Hold tight!")
+            await send_message(phone, "Perfect! I've updated your details. 🚀\n\nOutbound simulation starting in 15 seconds. Hold tight!")
             await redis_client.clear_generating(phone)
             return
 
