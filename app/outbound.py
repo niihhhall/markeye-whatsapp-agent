@@ -43,7 +43,7 @@ async def send_initial_outreach(name: str, phone_raw: str, company: str, form_da
         await asyncio.sleep(15)
         
         # 3. Outreach Content
-        first_message_content = "It's Albert here from After5! I noticed you just submitted an enquiry to try the demo, so here I am."
+        first_message_content = f"Hey {name}, it's Albert here from After5! I noticed you just submitted an enquiry to try the demo, so here I am."
         
         # 4. Attempt Template Outreach (Highly Recommended for WhatsApp Cloud API)
         template_name = "after5_outreach_2"
