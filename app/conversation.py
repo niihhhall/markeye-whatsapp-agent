@@ -254,16 +254,13 @@ async def check_low_content(phone: str, message: str, session: dict) -> bool:
 
 async def check_and_send_calendly(phone: str, text: str, session: dict) -> str:
     """
-    Ensures Calendly link is sent ONLY ONCE per conversation.
-    If already sent, removes from text and replaces with hint.
+    Tracks if Calendly link was sent.
+    We no longer block resending it if the user explicitly asks for it again.
     """
     calendly_link = settings.CALENDLY_LINK
     
     if calendly_link in text:
-        if await redis_client.has_sent_calendly(phone):
-            logger.info("[Conversation] Calendly already sent to %s. Removing from response.", phone)
-            text = text.replace(calendly_link, "the link's still there whenever you're ready")
-        else:
+        if not await redis_client.has_sent_calendly(phone):
             await redis_client.mark_calendly_sent(phone)
             logger.info("[Conversation] Tracking Calendly link sent to %s", phone)
 
