@@ -18,11 +18,17 @@ async def mark_as_read(conversation_id: str, message_id: str) -> bool:
         return await cloud.mark_as_read(message_id)
     return await bird.mark_as_read(conversation_id, message_id)
 
-async def send_chunked_messages(to: str, chunks: list[str], conversation_id: str = "", message_id: str = "") -> None:
+async def send_chunked_messages(
+    to: str, 
+    chunks: list[str], 
+    incoming_text: str = "", 
+    last_message_ts: float = 0, 
+    message_id: str = ""
+) -> None:
     """Send chunked messages using the configured provider."""
     if settings.MESSAGING_PROVIDER == "whatsapp_cloud":
-        return await cloud.send_chunked_messages(to, chunks, conversation_id, message_id)
-    return await bird.send_chunked_messages(to, chunks, conversation_id)
+        return await cloud.send_chunked_messages(to, chunks, incoming_text, last_message_ts, message_id)
+    return await bird.send_chunked_messages(to, chunks, incoming_text, last_message_ts)
 
 async def send_typing_indicator(to: str, conversation_id: str = "", message_id: str = "") -> bool:
     """Send typing indicator using the configured provider."""

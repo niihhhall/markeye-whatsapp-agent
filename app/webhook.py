@@ -156,12 +156,12 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         await redis_client.redis.set(f"last_msg_id:{sender_phone}", message_id, ex=300)
         await redis_client.redis.set(f"last_name:{sender_phone}", sender_name, ex=300)
 
-        # 5. Instant Blue Tick & Typing (Master UX)
-        background_tasks.add_task(mark_as_read, "", message_id)
-        background_tasks.add_task(send_typing_indicator, sender_phone, message_id)
+        # 5. Instant Blue Tick & Typing (REMOVED: Handled by advanced timing sequence)
+        # background_tasks.add_task(mark_as_read, "", message_id)
+        # background_tasks.add_task(send_typing_indicator, sender_phone, message_id)
         
         # Fire delayed processor (3s rolling timer)
-        background_tasks.add_task(_delayed_buffer_process, sender_phone, batch_id)
+        background_tasks.add_task(_delayed_buffer_process, sender_phone, batch_id, message_ts)
         
         # Fire hard-max safety check (8s fixed timer from first message in batch)
         # We only start this if it's the first message of a potentially new batch
@@ -170,7 +170,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
             pass
         else:
             # This shouldn't happen because buffer_message sets it, but for safety:
-            background_tasks.add_task(_hard_max_check, sender_phone)
+            background_tasks.add_task(_hard_max_check, sender_phone, message_ts)
         
         # Tracker Log in background
         background_tasks.add_task(_background_tracker_log, sender_phone, sender_name, message_text)
@@ -196,7 +196,7 @@ async def _background_tracker_log(phone: str, name: str, message: str):
         logger.error("[Webhook] Background Tracker failed: %s", e)
 
 
-async def _delayed_buffer_process(phone: str, batch_id: str):
+async def _delayed_buffer_process(phone: str, batch_id: str, last_message_ts: float = 0):
     """
     Wait. If no new messages arrived (batch_id still current),
     process the buffer. If new message arrived, this timer dies silently.
@@ -217,10 +217,10 @@ async def _delayed_buffer_process(phone: str, batch_id: str):
     combined = await redis_client.get_and_clear_buffer(phone)
     if combined:
         logger.info(f"Buffer ready for {phone}: {combined[:80]}...")
-        asyncio.create_task(_process_with_interrupt_protection(phone, combined))
+        asyncio.create_task(_process_with_interrupt_protection(phone, combined, last_message_ts=last_message_ts))
 
 
-async def _hard_max_check(phone: str):
+async def _hard_max_check(phone: str, last_message_ts: float = 0):
     """Hard max safety — force process even if messages still arriving."""
     await asyncio.sleep(settings.INPUT_BUFFER_MAX_SECONDS)
     
@@ -232,13 +232,14 @@ async def _hard_max_check(phone: str):
         combined = await redis_client.get_and_clear_buffer(phone)
         if combined:
             logger.info(f"Hard max hit for {phone}, force-processing")
-            asyncio.create_task(_process_with_interrupt_protection(phone, combined))
+            asyncio.create_task(_process_with_interrupt_protection(phone, combined, last_message_ts=last_message_ts))
 
 
 async def _process_with_interrupt_protection(
     phone: str, 
     combined_text: str, 
-    retry_count: int = 0
+    retry_count: int = 0,
+    last_message_ts: float = 0
 ):
     """
     Generate reply with interrupt protection.
@@ -256,7 +257,7 @@ async def _process_with_interrupt_protection(
             # We'll skip complex cooldown check here and let conversation engine handle or just reject.
             pass
 
-        # 2. Mark as read (Handled in webhook instantly now)
+        # 2. Mark as read (Handled in advanced timing now)
         last_msg_id_val = await redis_client.redis.get(f"last_msg_id:{phone}")
         last_msg_id = last_msg_id_val.decode('utf-8') if isinstance(last_msg_id_val, bytes) else (last_msg_id_val or "")
         
@@ -264,21 +265,12 @@ async def _process_with_interrupt_protection(
         await redis_client.set_generating(phone)
         
         # 4. Process via conversation engine
-        # We need to handle the interrupt check within or around the conversation call.
-        # The Master Prompt suggests a flow where we call generate_response directly,
-        # but our app has a complex process_conversation.
-        # We will wrap it.
-        
-        # To strictly follow "Interrupt Protection", we need to check `has_new_messages` 
-        # AFTER the LLM potentially returns. 
-        # However, process_conversation is a black box that also sends messages.
-        
-        # OPTION: Modify process_conversation to return the response text INSTEAD of sending,
-        # but that's a big change.
-        # BETTER: Use the existing logic in process_conversation which ALREADY has 
-        # an interrupt check (Step 9 in conversation.py).
-        
-        await process_conversation(phone, combined_text, message_id=last_msg_id or "")
+        await process_conversation(
+            phone, 
+            combined_text, 
+            message_id=last_msg_id or "", 
+            last_message_ts=last_message_ts
+        )
         
         # 5. Interrupt Check (Layer 3)
         # Note: Step 9 in conversation.py already does this:

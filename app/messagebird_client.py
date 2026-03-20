@@ -135,7 +135,13 @@ async def reply_to_conversation(conversation_id: str, body: str) -> dict | None:
     return None
 
 
-async def send_chunked_messages(to: str, chunks: list[str], conversation_id: str = "") -> None:
+async def send_chunked_messages(
+    to: str, 
+    chunks: list[str], 
+    incoming_text: str = "", 
+    last_message_ts: float = 0, 
+    conversation_id: str = ""
+) -> None:
     """
     Send multiple messages with realistic typing delays.
     """

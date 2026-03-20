@@ -121,13 +121,23 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
         # Step 10: Calendly Resend Logic (Fix 3)
         response_text = await check_and_send_calendly(phone, response_text, session)
 
+async def process_conversation(phone: str, message: str, conversation_id: str = "", message_id: str = "", last_message_ts: float = 0):
+    """Main conversation engine logic."""
+    try:
+        # (Existing logic...)
         # Step 11: Send natural multi-bubble response
         if response_text:
             print(f"[Conversation] 📤 Splitting and sending multi-bubble response to {phone}", flush=True)
             chunks = chunk_message(response_text)
             
             # Use the existing utility that handles delays and typing indicators
-            await send_chunked_messages(phone, chunks)
+            await send_chunked_messages(
+                to=phone, 
+                chunks=chunks, 
+                incoming_text=message, 
+                last_message_ts=last_message_ts, 
+                message_id=message_id
+            )
             
             if lead_id:
                 await tracker.set_typing_status(lead_id, False)

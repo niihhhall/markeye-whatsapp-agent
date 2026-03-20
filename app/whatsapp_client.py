@@ -45,28 +45,56 @@ async def send_message(to: str, body: str) -> dict | None:
         return None
 
 
-async def send_chunked_messages(to: str, chunks: list[str], conversation_id: str = "", message_id: str = "") -> None:
-    """Send multiple messages with realistic typing delays and interrupt check."""
+async def send_chunked_messages(
+    to: str, 
+    chunks: list[str], 
+    incoming_text: str = "", 
+    last_message_ts: float = 0, 
+    message_id: str = ""
+) -> None:
+    """Send multiple messages with realistic human-like timing sequence."""
+    from app.chunker import calculate_chunk_sequence
     from app.redis_client import redis_client
+    import time
+
+    current_time = time.time()
+    sequences = calculate_chunk_sequence(incoming_text, chunks, last_message_ts, current_time)
+
     for i, chunk in enumerate(chunks):
-        # 1. Start Typing Indicator
-        await send_typing_indicator(to)
+        seq = sequences[i]
+        
+        # 1. Blue Tick Delay
+        if seq["blue_tick_delay"] > 0:
+            await asyncio.sleep(seq["blue_tick_delay"])
+            if message_id:
+                await mark_as_read(message_id)
 
-        # 2. Thinking/Typing Delay (Human feel)
-        if i == 0:
-            delay = random.uniform(2.0, 4.0)
-        else:
-            delay = calculate_typing_delay(chunk)
-            
-        intervals = int(delay / 1.0)
-        for sec in range(intervals):
-            await asyncio.sleep(1.0)
-            if await redis_client.has_new_messages(to):
-                logger.info(f"Interrupt: New message during delay for {to}. Aborting.")
-                return
-        await asyncio.sleep(delay % 1.0)
+        # 2. Reading Delay
+        if seq["reading_delay"] > 0:
+            await asyncio.sleep(seq["reading_delay"])
 
+        # 3. Think Pause
+        if seq["think_pause"] > 0:
+            await asyncio.sleep(seq["think_pause"])
+
+        # 4. Typing Delay (with Indicator)
+        if seq["typing_delay"] > 0:
+            await send_typing_indicator(to, message_id)
             
+            # Check for interrupts during typing
+            intervals = int(seq["typing_delay"] / 1.0)
+            for _ in range(intervals):
+                await asyncio.sleep(1.0)
+                if await redis_client.has_new_messages(to):
+                    logger.info(f"Interrupt: New message during typing for {to}. Aborting.")
+                    return
+            await asyncio.sleep(seq["typing_delay"] % 1.0)
+
+        # 5. Review Pause
+        if seq["review_pause"] > 0:
+            await asyncio.sleep(seq["review_pause"])
+
+        # 6. Send Bubble
         await send_message(to, chunk)
 
 
