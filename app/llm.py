@@ -123,92 +123,81 @@ class LLMClient:
             raise e
 
     async def build_context(self, session: Dict[str, Any], lead_data: Dict[str, Any], message: str, knowledge_context: str = "") -> List[Dict[str, str]]:
-        """Builds the full LLM context."""
-        if not settings.USE_DYNAMIC_PROMPTING:
-            # LEGACY MODE: Load everything from one file
-            prompt_path = os.path.join(os.getcwd(), "prompts", "system_prompt.txt")
-            with open(prompt_path, "r", encoding="utf-8") as f:
-                system_prompt = f.read()
-        else:
-            # DYNAMIC MODE: Use PromptAssembler to build modular prompt
-            from app.prompt_assembler import prompt_assembler
-            conversation_state = session.get("state", "opening")
-            if hasattr(conversation_state, "value"):
-                conversation_state = conversation_state.value  # unwrap Enum
-            core_prompt = await prompt_assembler.build_prompt(
-                customer_message=message,
-                conversation_state=str(conversation_state),
-            )
-            
-            # 1. Dynamic Industry Injection (supplemental on top of assembled prompt)
-            industry_context = ""
-            industry = (lead_data.get("industry") or "").lower()
-            industry_map = {
-                "real_estate": "real_estate.txt",
-                "property": "real_estate.txt",
-                "ecommerce": "ecommerce.txt",
-                "store": "ecommerce.txt",
-                "legal": "legal.txt",
-                "law": "legal.txt",
-                "clinic": "clinics.txt",
-                "dental": "clinics.txt"
-            }
+        """Builds the full LLM context using static V3 system prompt."""
+        # Always load static system prompt from file
+        prompt_path = os.path.join(os.getcwd(), "prompts", "system_prompt.txt")
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            core_prompt = f.read()
 
-            # Check message for industry keywords too
-            msg_lower = message.lower()
-            for key, filename in industry_map.items():
-                if key in industry or key in msg_lower:
-                    path = os.path.join(os.getcwd(), "prompts", "knowledge", filename)
-                    if os.path.exists(path):
-                        with open(path, "r", encoding="utf-8") as f:
-                            industry_context = f"\n═══ INDUSTRY VERTICAL KNOWLEDGE ═══\n" + f.read()
-                    break
+        # 1. Dynamic Industry Injection
+        industry_context = ""
+        industry = (lead_data.get("industry") or "").lower()
+        industry_map = {
+            "real_estate": "real_estate.txt",
+            "property": "real_estate.txt",
+            "ecommerce": "ecommerce.txt",
+            "store": "ecommerce.txt",
+            "legal": "legal.txt",
+            "law": "legal.txt",
+            "clinic": "clinics.txt",
+            "dental": "clinics.txt"
+        }
 
-            # 2. Dynamic Objection Injection
-            objection_context = ""
-            objection_map = {
-                "price": "price.txt",
-                "cost": "price.txt",
-                "avoiding": "price_pressure.txt",
-                "bad": "bad_experience.txt",
-                "awful": "bad_experience.txt",
-                "chatgpt": "tools_comparison.txt",
-                "zapier": "tools_comparison.txt",
-                "manychat": "tools_comparison.txt",
-                "budget": "no_budget.txt",
-                "work": "ai_failure_fear.txt",
-                "sales team": "sales_team.txt",
-                "business hours": "business_hours.txt",
-                "weekends": "business_hours.txt",
-                "case study": "proof.txt",
-                "proof": "proof.txt",
-                "setup": "setup_time.txt",
-                "how long": "setup_time.txt",
-                "crm": "crm.txt",
-                "hubspot": "crm.txt",
-                "ready": "ai_readiness.txt",
-                "ai isn't": "ai_readiness.txt",
-                "few months": "delayed_action.txt",
-                "small business": "small_business.txt",
-                "too good": "skepticism.txt",
-                "wrong": "ai_errors.txt",
-                "error": "ai_errors.txt",
-                "not interested": "not_interested.txt",
-                "manually": "manual_process.txt",
-                "more information": "send_info.txt"
-            }
-            
-            found_objections = []
-            for key, filename in objection_map.items():
-                if key in msg_lower:
-                    path = os.path.join(os.getcwd(), "prompts", "objections", filename)
-                    if os.path.exists(path) and filename not in found_objections:
-                        with open(path, "r", encoding="utf-8") as f:
-                            objection_context += f.read() + "\n"
-                        found_objections.append(filename)
-            
-            if objection_context:
-                objection_context = "\n═══ OBJECTION HANDLING (DIAGNOSTIC) ═══\n" + objection_context
+        # Check message for industry keywords too
+        msg_lower = message.lower()
+        for key, filename in industry_map.items():
+            if key in industry or key in msg_lower:
+                path = os.path.join(os.getcwd(), "prompts", "knowledge", filename)
+                if os.path.exists(path):
+                    with open(path, "r", encoding="utf-8") as f:
+                        industry_context = f"\n═══ INDUSTRY VERTICAL KNOWLEDGE ═══\n" + f.read()
+                break
+
+        # 2. Dynamic Objection Injection
+        objection_context = ""
+        objection_map = {
+            "price": "price.txt",
+            "cost": "price.txt",
+            "avoiding": "price_pressure.txt",
+            "bad": "bad_experience.txt",
+            "awful": "bad_experience.txt",
+            "chatgpt": "tools_comparison.txt",
+            "zapier": "tools_comparison.txt",
+            "manychat": "tools_comparison.txt",
+            "budget": "no_budget.txt",
+            "work": "ai_failure_fear.txt",
+            "sales team": "sales_team.txt",
+            "business hours": "business_hours.txt",
+            "weekends": "business_hours.txt",
+            "case study": "proof.txt",
+            "proof": "proof.txt",
+            "setup": "setup_time.txt",
+            "how long": "setup_time.txt",
+            "crm": "crm.txt",
+            "hubspot": "crm.txt",
+            "ready": "ai_readiness.txt",
+            "ai isn't": "ai_readiness.txt",
+            "few months": "delayed_action.txt",
+            "small business": "small_business.txt",
+            "too good": "skepticism.txt",
+            "wrong": "ai_errors.txt",
+            "error": "ai_errors.txt",
+            "not interested": "not_interested.txt",
+            "manually": "manual_process.txt",
+            "more information": "send_info.txt"
+        }
+
+        found_objections = []
+        for key, filename in objection_map.items():
+            if key in msg_lower:
+                path = os.path.join(os.getcwd(), "prompts", "objections", filename)
+                if os.path.exists(path) and filename not in found_objections:
+                    with open(path, "r", encoding="utf-8") as f:
+                        objection_context += f.read() + "\n"
+                    found_objections.append(filename)
+
+        if objection_context:
+            objection_context = "\n═══ OBJECTION HANDLING (DIAGNOSTIC) ═══\n" + objection_context
 
         # 3. Dynamic Example Injection (Phase 2)
         example_context = ""
@@ -232,7 +221,6 @@ class LLMClient:
             print(f"[LLM] ❌ Error getting relevant example: {e}", flush=True)
 
         # Combine Core + Addons (Industry, Objections, Examples)
-        # Using a more robust combination that appends if placeholders aren't found
         system_prompt = core_prompt
         
         # Industry Injection

@@ -150,15 +150,6 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         
         logger.info(f"Message from {sender_phone} ({sender_name}): {message_text[:80]}...")
         
-        # === ADMIN TRAINING COMMANDS ===
-        from app.training_handler import training_handler
-        if training_handler.is_training_command(message_text) and training_handler.is_admin(sender_phone):
-            logger.info(f"[Training] Admin command from {sender_phone}")
-            response = await training_handler.handle(sender_phone, message_text)
-            if response:
-                await send_message(sender_phone, response)
-                return {"status": "ok", "admin": "handled"}
-
         # === BUFFER THE MESSAGE — DON'T PROCESS YET ===
         batch_id = await redis_client.buffer_message(sender_phone, message_text)
         # Store last message_id and sender_name for processing

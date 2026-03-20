@@ -1,0 +1,34 @@
+Listing last 10 leads from Supabase...
+✅ Found 8 leads.
+--- Lead (2026-03-15T16:03:17.085007+00:00) ---
+Name: Test 
+Phone: +918800557262
+Source: Other
+--- Lead (2026-03-15T06:25:12.872733+00:00) ---
+Name: Raff 
+Phone: whatsapp:+601123273977
+Source: Other
+--- Lead (2026-03-10T09:18:36.479661+00:00) ---
+Name:  
+Phone: whatsapp:+447555704345
+Source: Other
+--- Lead (2026-03-10T06:23:05.166514+00:00) ---
+Name:  
+Phone: whatsapp:+971585992301
+Source: Other
+--- Lead (2026-03-10T06:14:08.994469+00:00) ---
+Name:  
+Phone: whatsapp:+918709225420
+Source: Other
+--- Lead (2026-03-10T06:13:51.578+00:00) ---
+Name:  
+Phone: whatsapp:+447534629690
+Source: Other
+--- Lead (2026-03-10T06:05:02.199467+00:00) ---
+Name:  
+Phone: whatsapp:+919427470858
+Source: Other
+--- Lead (2026-03-08T08:52:56.473863+00:00) ---
+Name:  
+Phone: whatsapp:+918160178327
+Source: Other

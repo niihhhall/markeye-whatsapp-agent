@@ -8,7 +8,6 @@ class Settings(BaseSettings):
     MESSAGEBIRD_WORKSPACE_ID: str = os.getenv("MESSAGEBIRD_WORKSPACE_ID", "")
     MESSAGEBIRD_CHANNEL_ID: str = os.getenv("MESSAGEBIRD_CHANNEL_ID", "")
     MESSAGEBIRD_WHATSAPP_NUMBER: str = ""  # for reference only
-    ADMIN_NUMBERS: list[str] = ["whatsapp:+918320123456"] # Default placeholder
 
 
     # WhatsApp Cloud API (Meta)
@@ -61,9 +60,6 @@ class Settings(BaseSettings):
     # Human-like Behavior
     MARK_AS_READ_DELAY: float = 2.0
     SHOW_TYPING_INDICATOR: bool = True
-    USE_DYNAMIC_PROMPTING: bool = os.getenv("USE_DYNAMIC_PROMPTING", "True").lower() == "true"
-    PROMPT_ASSEMBLER_CACHE_TTL: int = int(os.getenv("PROMPT_ASSEMBLER_CACHE_TTL", "300"))
-
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 @lru_cache

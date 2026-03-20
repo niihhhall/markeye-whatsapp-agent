@@ -1,0 +1,18 @@
+Checking messages for whatsapp:+918160178327...
+Found Lead ID: 6f6b8524-b009-407c-b27e-90590ddc4a5d
+✅ Found 5 messages.
+--- Message (2026-03-15T16:49:10.476405+00:00) ---
+Role: N/A
+Content: /reset
+--- Message (2026-03-15T16:41:35.775076+00:00) ---
+Role: N/A
+Content: /reset
+--- Message (2026-03-15T16:41:04.974078+00:00) ---
+Role: N/A
+Content: Heyy
+--- Message (2026-03-15T13:42:31.485866+00:00) ---
+Role: N/A
+Content: Help me?
+--- Message (2026-03-15T12:25:09.715494+00:00) ---
+Role: N/A
+Content: Heyy

@@ -274,16 +274,7 @@ async def build_enhanced_context(session: dict, lead_data: dict, message: str, k
     """Builds enhanced LLM context with BANT, Form data and Knowledge base context."""
     messages = await llm_client.build_context(session, lead_data, message, knowledge_context)
     
-    # 1. Live Training (WhatsApp Dynamic Training)
-    from app.training_retriever import get_relevant_training
-    dynamic_training = await get_relevant_training(message)
-    
-    # Extract existing system prompt to append/pre-pend if needed, 
-    # but llm_client.build_context already reads system_prompt.txt.
-    # We will let the placeholders in system_prompt.txt handle it,
-    # but we can add an extra "INSTRUCTION" block here for dynamic guidance.
-    
-    # 2. Fetch Relevant RAG Context
+    # 1. Fetch Relevant RAG Context
     rag_map = {
         ConversationState.OPENING: "rag:sales:psychology",
         ConversationState.DISCOVERY: "rag:sales:spin",
@@ -335,8 +326,6 @@ async def build_enhanced_context(session: dict, lead_data: dict, message: str, k
 
     # Append everything to the system message
     if messages and messages[0]["role"] == "system":
-        if dynamic_training:
-            messages[0]["content"] += dynamic_training
         if rag_training:
             messages[0]["content"] += f"\n\n--- SALES TRAINING MODULE ---\n{rag_training}\n"
         messages[0]["content"] += instruction
