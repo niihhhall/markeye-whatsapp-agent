@@ -51,8 +51,7 @@ async def send_initial_outreach(name: str, phone_raw: str, company: str, form_da
             {
                 "type": "body",
                 "parameters": [
-                    {"type": "text", "text": name},
-                    {"type": "text", "text": company}
+                    {"type": "text", "text": name}
                 ]
             }
         ]

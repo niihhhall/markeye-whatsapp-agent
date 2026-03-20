@@ -99,7 +99,7 @@ async def send_chunked_messages(
         await send_message(to, formatted_chunk)
 
 
-async def send_template_message(to: str, template_name: str, language_code: str = "en_US", components: list = None) -> dict | None:
+async def send_template_message(to: str, template_name: str, language_code: str = "en", components: list = None) -> dict | None:
     """Send a WhatsApp template message."""
     payload = {
         "messaging_product": "whatsapp",
