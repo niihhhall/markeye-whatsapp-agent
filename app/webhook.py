@@ -84,9 +84,15 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         # 3. Generation Cleanup (Safeguard 3)
         await redis_client.check_and_clear_stale_generation(sender_phone)
 
-        # 4. CLOSED State Check — V4: re-open returning leads after 24h
+        # 4. CLOSED State Check — V4: re-open returning leads after 24h (bypassed for /reset commands)
         session = await redis_client.get_session(sender_phone)
-        if session and session.get("state") == ConversationState.CLOSED:
+        
+        # Extract text early just for the command check
+        cmd_check = ""
+        if message_type == "text":
+            cmd_check = message.get("text", {}).get("body", "").strip().lower()
+
+        if session and session.get("state") == ConversationState.CLOSED and not cmd_check.startswith(("/reset", "#reset")):
             last_updated = session.get("last_updated")
             if last_updated:
                 from datetime import datetime
