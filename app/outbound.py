@@ -62,9 +62,12 @@ async def send_initial_outreach(name: str, phone_raw: str, company: str, form_da
             }
         ]
         
-        if is_sim:
+        if True: # Temporary: Always use raw text for reliability while template is being fixed
             template_res = None
-            logger.info("[Outreach] 🧪 Simulation detected: skipped delay and skipping template.")
+            if is_sim:
+                logger.info("[Outreach] 🧪 Simulation: Skipping template, using raw text fallback.")
+            else:
+                logger.info("[Outreach] 🚀 Bypassing template, using raw text for reliability.")
         else:
             logger.info("[Outreach] 🚀 Attempting template outreach for %s (%s)", name, sender_phone)
             template_res = await send_template_message(sender_phone, template_name, components=components)
@@ -99,7 +102,8 @@ async def send_initial_outreach(name: str, phone_raw: str, company: str, form_da
             # Log to Supabase (already logged to session history)
             await tracker.log_outbound(lead_id, first_message_content)
         else:
-            logger.warning("[Outreach] ⚠️ Template send failed. Falling back to raw text.")
+            if not is_sim:
+                logger.warning("[Outreach] ⚠️ Template send failed. Falling back to raw text.")
             
             # 5. Fallback: Human-like delivery — bypass chunking for template
             chunks = chunk_message(first_message_content, is_template=True)
