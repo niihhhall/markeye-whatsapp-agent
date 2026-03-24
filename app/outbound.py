@@ -52,22 +52,20 @@ async def send_initial_outreach(name: str, phone_raw: str, company: str, form_da
         first_message_content = raw_template.format(name=name, company_name=company)
         
         # 4. Attempt Template Outreach (Highly Recommended for WhatsApp Cloud API)
-        template_name = "after5_outreach_2"
+        template_name = "after5_outreach"
         components = [
             {
                 "type": "body",
                 "parameters": [
-                    {"type": "text", "text": name}
+                    {"type": "text", "text": name},
+                    {"type": "text", "text": company}
                 ]
             }
         ]
         
-        if True: # Temporary: Always use raw text for reliability while template is being fixed
+        if is_sim:
+            logger.info("[Outreach] 🧪 Simulation: Skipping template, using raw text fallback.")
             template_res = None
-            if is_sim:
-                logger.info("[Outreach] 🧪 Simulation: Skipping template, using raw text fallback.")
-            else:
-                logger.info("[Outreach] 🚀 Bypassing template, using raw text for reliability.")
         else:
             logger.info("[Outreach] 🚀 Attempting template outreach for %s (%s)", name, sender_phone)
             template_res = await send_template_message(sender_phone, template_name, components=components)
