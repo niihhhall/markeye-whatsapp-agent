@@ -45,15 +45,15 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
         
-            # Check for status updates (delivered, read, failed)
-            if "statuses" in value:
-                status_obj = value["statuses"][0]
-                status = status_obj.get("status")
-                recipient = status_obj.get("recipient_id")
-                logger.info(f"[Webhook Status] {recipient}: {status}")
-                if status == "failed":
-                    errors = status_obj.get("errors")
-                    logger.error(f"[Webhook Status Error] {recipient} failed with errors: {errors}")
+        # Check for status updates (delivered, read, failed)
+        if "statuses" in value:
+            status_obj = value["statuses"][0]
+            status = status_obj.get("status")
+            recipient = status_obj.get("recipient_id")
+            logger.info(f"[Webhook Status] {recipient}: {status}")
+            if status == "failed":
+                errors = status_obj.get("errors")
+                logger.error(f"[Webhook Status Error] {recipient} failed with errors: {errors}")
             return {"status": "ignored"}
         
         message = value["messages"][0]
