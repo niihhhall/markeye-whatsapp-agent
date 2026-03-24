@@ -377,7 +377,12 @@ async def build_enhanced_context(session: dict, lead_data: dict, message: str, k
     # If the user mentions booking, or we are in a booking-related state, 
     # re-fetch the absolute truth from the database to avoid Redis lag or stale cache.
     msg_low = message.lower()
-    booking_keywords = ["booked", "done", "scheduled", "appointment", "calendar", "confirm"]
+    booking_keywords = [
+        "booked", "done", "scheduled", "appointment", "calendar", "confirm",
+        "sorted", "just did", "all set", "locked in", "reserved", "signed up",
+        "filled in", "submitted", "completed", "went through", "i did it",
+        "its booked", "just booked", "ive booked", "booking confirmed"
+    ]
     
     lead_id = lead_data.get("id")
     live_state = session.get("state")
@@ -423,6 +428,16 @@ async def build_enhanced_context(session: dict, lead_data: dict, message: str, k
             messages[0]["content"] += "IMPORTANT: A new booking was just detected in the system within the last 15 minutes. You MUST acknowledge this.\n"
         else:
             messages[0]["content"] += "IMPORTANT: No new booking found in the last 15 minutes. If the user claims they just booked, they are lying or the system hasn't updated. Tell them to wait a second or try again.\n"
+    elif any(kw in msg_low for kw in booking_keywords) and messages and messages[0]["role"] == "system":
+        # Lead mentioned booking but NO booking data exists at all in the database
+        messages[0]["content"] += (
+            "\n\n═══ LIVE SYSTEM DATA ═══\n"
+            "No bookings found in the system for this lead.\n"
+            "NEW_BOOKING_JUST_CONFIRMED: FALSE\n"
+            "IMPORTANT: The lead may claim they booked but the system has ZERO record of any booking. "
+            "Do NOT confirm. Ask them to try the link again. Say something like: "
+            "'hmm nothing's come through on my end yet, give it a sec or try the link again'\n"
+        )
 
     # 1. Fetch Relevant RAG Context
     rag_map = {
