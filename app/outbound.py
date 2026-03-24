@@ -68,7 +68,12 @@ async def send_initial_outreach(name: str, phone_raw: str, company: str, form_da
             template_res = None
         else:
             logger.info("[Outreach] 🚀 Attempting template outreach for %s (%s)", name, sender_phone)
-            template_res = await send_template_message(sender_phone, template_name, components=components)
+            template_res = await send_template_message(
+                sender_phone, 
+                template_name, 
+                language_code="en_GB", 
+                components=components
+            )
         
         # 6. Initialize or Update session with history and correct state
         target_state = ConversationState.DISCOVERY if form_data else ConversationState.OPENING
