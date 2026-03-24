@@ -69,22 +69,6 @@ async def send_initial_outreach(name: str, phone_raw: str, company: str, form_da
             logger.info("[Outreach] 🚀 Attempting template outreach for %s (%s)", name, sender_phone)
             template_res = await send_template_message(sender_phone, template_name, components=components)
         
-        if template_res:
-            logger.info("[Outreach] ✅ Template sent successfully via WhatsApp Cloud API")
-            # Log the message to Supabase
-            await tracker.log_outbound(lead_id, first_message_content)
-        else:
-            logger.warning("[Outreach] ⚠️ Template send failed. Falling back to raw text.")
-            
-            # 5. Fallback: Human-like delivery — bypass chunking for template
-            chunks = chunk_message(first_message_content, is_template=True)
-            
-            # Note: typing indicator and delays are now handled INSIDE send_chunked_messages
-            await send_chunked_messages(sender_phone, chunks)
-            
-            # Log to Supabase
-            await tracker.log_outbound(lead_id, first_message_content)
-
         # 6. Initialize or Update session with history and correct state
         target_state = ConversationState.DISCOVERY if form_data else ConversationState.OPENING
         
@@ -98,7 +82,7 @@ async def send_initial_outreach(name: str, phone_raw: str, company: str, form_da
                 "lead_data": {**(lead or {}), **(form_data or {})}
             }
         
-        # Merge history: Add outreach message
+        # Merge history: Add outreach message EARLY to prevent race conditions
         session["history"].append({"role": "assistant", "content": first_message_content})
         session["turn_count"] = session.get("turn_count", 0) + 1
         session["state"] = target_state
@@ -108,6 +92,24 @@ async def send_initial_outreach(name: str, phone_raw: str, company: str, form_da
         # 7. Update conversation state in Supabase
         state_label = "Discovery" if target_state == ConversationState.DISCOVERY else "Opening"
         await tracker.update_state(lead_id, state_label)
+
+        # 8. Delivery (now happening after session is safe)
+        if template_res:
+            logger.info("[Outreach] ✅ Template sent successfully via WhatsApp Cloud API")
+            # Log to Supabase (already logged to session history)
+            await tracker.log_outbound(lead_id, first_message_content)
+        else:
+            logger.warning("[Outreach] ⚠️ Template send failed. Falling back to raw text.")
+            
+            # 5. Fallback: Human-like delivery — bypass chunking for template
+            chunks = chunk_message(first_message_content, is_template=True)
+            
+            # Note: typing indicator and delays are handled INSIDE send_chunked_messages.
+            # This is where the long delays (>30s) happen.
+            await send_chunked_messages(sender_phone, chunks)
+            
+            # Log to Supabase
+            await tracker.log_outbound(lead_id, first_message_content)
 
     except Exception as e:
         logger.error("[Outreach] 🚨 Failed to send initial outreach for %s: %s", phone_raw, e, exc_info=True)
