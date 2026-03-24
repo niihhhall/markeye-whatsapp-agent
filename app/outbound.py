@@ -42,7 +42,10 @@ async def send_initial_outreach(name: str, phone_raw: str, company: str, form_da
         lead_id = lead.get("id") if lead else "unknown"
 
         # 2. Start outreach sequence (Wait for lead to settle)
-        await asyncio.sleep(15)
+        # Simulation Reliability: Skip delay for testing
+        is_sim = form_data and form_data.get("source") == "Interactive Reset Simulation"
+        if not is_sim:
+            await asyncio.sleep(15)
         
         # 3. Outreach Content
         raw_template = random.choice(OUTREACH_TEMPLATES)
@@ -59,12 +62,9 @@ async def send_initial_outreach(name: str, phone_raw: str, company: str, form_da
             }
         ]
         
-        # Simulation Reliability: Skip template for testing since Meta status is flaky
-        is_sim = form_data and form_data.get("source") == "Interactive Reset Simulation"
-        
         if is_sim:
             template_res = None
-            logger.info("[Outreach] 🧪 Simulation detected: skipping template for reliability.")
+            logger.info("[Outreach] 🧪 Simulation detected: skipped delay and skipping template.")
         else:
             logger.info("[Outreach] 🚀 Attempting template outreach for %s (%s)", name, sender_phone)
             template_res = await send_template_message(sender_phone, template_name, components=components)
@@ -85,14 +85,24 @@ async def send_initial_outreach(name: str, phone_raw: str, company: str, form_da
             # Log to Supabase
             await tracker.log_outbound(lead_id, first_message_content)
 
-        # 6. Initialize session with history and correct state
+        # 6. Initialize or Update session with history and correct state
         target_state = ConversationState.DISCOVERY if form_data else ConversationState.OPENING
-        session = {
-            "state": target_state,
-            "history": [{"role": "assistant", "content": first_message_content}],
-            "turn_count": 1,
-            "lead_data": {**(lead or {}), **(form_data or {})}
-        }
+        
+        # Check if a session already exists (e.g. user texted while we were processing)
+        session = await redis_client.get_session(sender_phone)
+        if not session:
+            session = {
+                "state": target_state,
+                "history": [],
+                "turn_count": 0,
+                "lead_data": {**(lead or {}), **(form_data or {})}
+            }
+        
+        # Merge history: Add outreach message
+        session["history"].append({"role": "assistant", "content": first_message_content})
+        session["turn_count"] = session.get("turn_count", 0) + 1
+        session["state"] = target_state
+        
         await redis_client.save_session(sender_phone, session)
         
         # 7. Update conversation state in Supabase

@@ -116,15 +116,22 @@ async def process_conversation(phone: str, message: str, conversation_id: str = 
                     "form_message": fake_form["message"]
                 }).eq("id", lead_id).execute()
 
-            # Trigger outreach in background task (15s delay inside)
+            # Trigger outreach in background task (Delay bypassed for simulations)
             print(f"[Conversation] 🧪 Triggering interactive outbound flow for {phone} using {company}", flush=True)
             asyncio.create_task(send_initial_outreach(name, phone, company, fake_form))
             
-            # Clear sim flag
+            # 1. Update session state to Discovery IMMEDIATELY to prevent race condition
+            # 2. Add marker to history so LLM knows an intro is coming/sent
+            session["state"] = ConversationState.DISCOVERY
             session["sim_collecting"] = False
-            await redis_client.save_session(phone, session)
+            # We don't add to history here because send_initial_outreach handles it, 
+            # but setting state to Discovery stops the "Opening" logic.
             
-            await send_message(phone, "Perfect! I've updated your details. 🚀\n\nOutbound simulation starting in 15 seconds. Hold tight!")
+            await redis_client.save_session(phone, session)
+            if lead_id:
+                await tracker.update_state(lead_id, "Discovery")
+            
+            await send_message(phone, "Perfect! I've updated your details. 🚀\n\nStarting outbound demo now... hold tight!")
             await redis_client.clear_generating(phone)
             return
 
