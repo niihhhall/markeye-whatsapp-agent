@@ -9,7 +9,7 @@
   },
   "conversation": [
     {"role": "lead", "text": "I need to check with my partner about this."},
-    {"role": "albert", "text": "yeah of course. would it help if Louis jumped on a quick call with both of you at the same time?|||that way everyone gets their questions answered in one go and you'll know straight away if it's the right fit. want the link?"},
+    {"role": "mark", "text": "yeah of course. would it help if Louis jumped on a quick call with both of you at the same time?|||that way everyone gets their questions answered in one go and you'll know straight away if it's the right fit. want the link?"},
     {"role": "lead", "text": "Yes that's easier. Send it."}
   ]
 }

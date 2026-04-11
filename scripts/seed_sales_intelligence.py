@@ -40,7 +40,7 @@ SALES_DOC = {
 - AMIABLE: Wants safety. Use low pressure, emphasize no-obligation.""",
 
     "rag:sales:closing": """═══ CLOSING — NATURAL PROGRESSION ═══
-- ASSUMPTIVE: Louis can show you X... want the link?
+- ASSUMPTIVE: The team can show you X... want the link?
 - SUMMARY CLOSE: Reflect their words back before suggesting call.
 - The Call is a Taste: The call IS the demo.
 - When NOT to close: If they said yes, stop selling. If they're not ready, leave door open.""",

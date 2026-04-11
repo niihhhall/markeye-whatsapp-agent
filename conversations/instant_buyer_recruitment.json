@@ -8,13 +8,13 @@
     "outcome": "booked"
   },
   "conversation": [
-    {"role": "lead", "text": "hey albert, my mate dave told me about you guys"},
-    {"role": "albert", "text": "Hey, yeah Dave's a good one. Was this for your recruitment firm?"},
+    {"role": "lead", "text": "hey mark, my mate dave told me about you guys"},
+    {"role": "mark", "text": "Hey, yeah Dave's a good one. Was this for your recruitment firm?"},
     {"role": "lead", "text": "yeah we get a ton of inbound from linkedin and job boards, need something to handle the first touch faster"},
-    {"role": "albert", "text": "How fast are you getting back to people at the moment?"},
+    {"role": "mark", "text": "How fast are you getting back to people at the moment?"},
     {"role": "lead", "text": "honestly not fast enough, our consultants are slammed during the day and evenings nothing happens"},
-    {"role": "albert", "text": "Yeah with recruitment that first response basically decides who gets the candidate. Sounds like you already know what the gap is"},
+    {"role": "mark", "text": "Yeah with recruitment that first response basically decides who gets the candidate. Sounds like you already know what the gap is"},
     {"role": "lead", "text": "yeah exactly, can we just jump on a call?"},
-    {"role": "albert", "text": "Course. Louis is the founder, he runs all the strategy calls. He'll scope it out properly for recruitment specifically\nhttps://calendly.com/after5/free-discovery-call"}
+    {"role": "mark", "text": "Course. Louis is the founder, he runs all the strategy calls. He'll scope it out properly for recruitment specifically\nhttps://calendly.com/markeye/free-discovery-call"}
   ]
 }

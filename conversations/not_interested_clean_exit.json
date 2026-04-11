@@ -9,8 +9,8 @@
   },
   "conversation": [
     {"role": "lead", "text": "hi i filled in the form but honestly i dont think we need this right now"},
-    {"role": "albert", "text": "No worries at all. Do you mind me asking what made you reach out in the first place?"},
+    {"role": "mark", "text": "No worries at all. Do you mind me asking what made you reach out in the first place?"},
     {"role": "lead", "text": "just curious really, we handle everything in house and its fine"},
-    {"role": "albert", "text": "Fair enough. If that changes down the line you know where to find us"}
+    {"role": "mark", "text": "Fair enough. If that changes down the line you know where to find us"}
   ]
 }

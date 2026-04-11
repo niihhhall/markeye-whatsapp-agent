@@ -5,19 +5,58 @@ from app.config import settings
 from app.llm import llm_client
 from app.redis_client import redis_client
 
-from app.tracker import AlbertTracker
+from app.tracker import MarkTracker
 
-tracker = AlbertTracker()
+tracker = MarkTracker()
 
-async def extract_bant(phone: str, history: List[Dict[str, str]]):
+def should_extract_bant(message: str, count: int, current_state: str) -> bool:
+    """Heuristic to decide if we should trigger expensive BANT extraction."""
+    # 1. Force extract if state just moved to qualification
+    if current_state == "qualification":
+        return True
+        
+    # 2. Force extract every 3 messages
+    if count >= 3:
+        return True
+        
+    # 3. Detect BANT keywords
+    msg_low = message.lower()
+    keywords = {
+        "budget": ["budget", "spend", "cost", "price", "afford", "invest"],
+        "authority": ["decide", "boss", "team", "approve", "ceo", "founder"],
+        "need": ["need", "problem", "struggling", "pain", "challenge", "issue"],
+        "timeline": ["when", "urgent", "asap", "timeline", "deadline", "soon"]
+    }
+    for category in keywords:
+        if any(kw in msg_low for kw in keywords[category]):
+            return True
+            
+    return False
+
+async def extract_bant(phone: str, history: List[Dict[str, str]], client_config: dict = None):
     """Background BANT extraction using a cheap LLM model."""
     prompt_path = os.path.join(os.getcwd(), "prompts", "bant_prompt.txt")
     with open(prompt_path, "r", encoding="utf-8") as f:
         bant_prompt = f.read()
 
+    # Client-specific criteria injection
+    criteria_text = ""
+    if client_config and client_config.get("bant_criteria"):
+        criteria_text = f"\nCustom Client BANT Criteria: {json.dumps(client_config['bant_criteria'])}\n"
+    
+    # Custom Questions check
+    custom_questions = ""
+    if client_config and client_config.get("qualification_questions"):
+        questions = client_config.get("qualification_questions")
+        if isinstance(questions, list):
+            custom_questions = "\nADDITIONAL QUESTIONS TO VERIFY:\n" + "\n".join(f"- {q}" for q in questions)
+    
     # Format history for prompt
     history_text = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in history])
     system_prompt = bant_prompt.replace("{{conversation_history}}", history_text)
+    
+    if criteria_text or custom_questions:
+        system_prompt += f"\n\n═══ CLIENT SPECIFIC INSTRUCTIONS ═══{criteria_text}{custom_questions}"
 
     messages = [{"role": "system", "content": system_prompt}]
 
@@ -32,19 +71,13 @@ async def extract_bant(phone: str, history: List[Dict[str, str]]):
 
         response_text = await llm_client.call_llm(
             messages, 
-            model=settings.OPENROUTER_BANT_MODEL,
+            model=settings.BANT_MODEL,
             lead_id=lead_id,
             conversation_state=session["state"],
             phone=phone,
-            company=lead_data.get("company", "")
+            company=lead_data.get("company", ""),
+            response_format={"type": "json_object"}
         )
-        # Clean response text in case LLM added markdown backticks
-        response_text = response_text.strip()
-        if response_text.startswith("```json"):
-            response_text = response_text[7:]
-        if response_text.endswith("```"):
-            response_text = response_text[:-3]
-        response_text = response_text.strip()
         
         bant_data = json.loads(response_text)
         
@@ -80,3 +113,23 @@ async def extract_bant(phone: str, history: List[Dict[str, str]]):
             
     except Exception as e:
         print(f"Error extracting BANT for {phone}: {e}")
+
+async def handle_bant_extraction(phone: str, message: str, history: List[Dict[str, str]], client_config: dict = None):
+    """Wrapper to handle the extraction logic and message counting."""
+    try:
+        count_key = f"bant_count:{phone}"
+        count = int(await redis_client.redis.get(count_key) or 0) + 1
+        
+        session = await redis_client.get_session(phone)
+        current_state = session.get("state", "opening")
+        
+        if should_extract_bant(message, count, current_state):
+            print(f"[BANT] 🧠 Triggering extraction for {phone} (Count: {count})")
+            await extract_bant(phone, history, client_config)
+            await redis_client.redis.set(count_key, "0") # Reset
+        else:
+            await redis_client.redis.set(count_key, str(count))
+            print(f"[BANT] ⏩ Skipping extraction for {phone} (Count: {count})")
+            
+    except Exception as e:
+        print(f"Error in handle_bant_extraction: {e}")

@@ -8,11 +8,11 @@
     "outcome": "booked"
   },
   "conversation": [
-    {"role": "albert", "text": "hey Chris, saw you run an agency. been having some interesting chats with agencies lately about how AI fits into the offer. what kind of clients do you guys mainly work with?"},
+    {"role": "mark", "text": "hey Chris, saw you run an agency. been having some interesting chats with agencies lately about how AI fits into the offer. what kind of clients do you guys mainly work with?"},
     {"role": "lead", "text": "We do lead gen for local businesses, mostly home services. My clients keep asking about AI chatbots though and I don't want to build them myself."},
-    {"role": "albert", "text": "haha yeah it's a massive headache if you're not specialised in it. we actually do regular partnerships with agencies|||you drive the traffic, we build the agents that convert it. you get 15 percent commission on every build and your clients stay happy because their leads actually get handled"},
+    {"role": "mark", "text": "haha yeah it's a massive headache if you're not specialised in it. we actually do regular partnerships with agencies|||you drive the traffic, we build the agents that convert it. you get 15 percent commission on every build and your clients stay happy because their leads actually get handled"},
     {"role": "lead", "text": "That sounds perfect. How do we start?"},
-    {"role": "albert", "text": "best bet is a quick 15 min chat with our founder Louis, he handles the agency side. he'll show you the setup and how the referral bit works|||want me to send the link?"},
+    {"role": "mark", "text": "best bet is a quick 15 min chat with our founder Louis, he handles the agency side. he'll show you the setup and how the referral bit works|||want me to send the link?"},
     {"role": "lead", "text": "Yes please!"}
   ]
 }

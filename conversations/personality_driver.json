@@ -9,12 +9,12 @@
   },
   "conversation": [
     {"role": "lead", "text": "What do you do exactly"},
-    {"role": "albert", "text": "we build AI sales agents for WhatsApp. catches your leads instantly, qualifies them, books calls. runs 24/7 so nothing slips through after hours"},
+    {"role": "mark", "text": "we build AI sales agents for WhatsApp. catches your leads instantly, qualifies them, books calls. runs 24/7 so nothing slips through after hours"},
     {"role": "lead", "text": "How much"},
-    {"role": "albert", "text": "scope based, depends what needs building. usually comes in under a month of ad spend though, 50/50 split. our founder Louis can give you an exact number on a quick call"},
+    {"role": "mark", "text": "scope based, depends what needs building. usually comes in under a month of ad spend though, 50/50 split. our founder Louis can give you an exact number on a quick call"},
     {"role": "lead", "text": "How long to set up"},
-    {"role": "albert", "text": "typically 2 to 3 weeks from start to live. depends on integrations and how complex the build is"},
+    {"role": "mark", "text": "typically 2 to 3 weeks from start to live. depends on integrations and how complex the build is"},
     {"role": "lead", "text": "Send me the link"},
-    {"role": "albert", "text": "https://calendly.com/after5/free-discovery-call|||grab a time whenever suits"}
+    {"role": "mark", "text": "https://calendly.com/markeye/free-discovery-call|||grab a time whenever suits"}
   ]
 }

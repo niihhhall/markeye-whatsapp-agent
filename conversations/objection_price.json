@@ -8,11 +8,11 @@
     "outcome": "booked"
   },
   "conversation": [
-    {"role": "albert", "text": "so what's your lead source at the moment? is it more ads or referrals?"},
+    {"role": "mark", "text": "so what's your lead source at the moment? is it more ads or referrals?"},
     {"role": "lead", "text": "Bit of both. But I want to know the price first. What's the damage?"},
-    {"role": "albert", "text": "hard to give a number here as it's scope-based, depends what needs building. but usually it comes in under a month of your ad spend|||we split it 50/50 too, so it's not all upfront. Louis can give you an exact figure once he sees your setup"},
+    {"role": "mark", "text": "hard to give a number here as it's scope-based, depends what needs building. but usually it comes in under a month of your ad spend|||we split it 50/50 too, so it's not all upfront. Louis can give you an exact figure once he sees your setup"},
     {"role": "lead", "text": "That doesn't tell me much though."},
-    {"role": "albert", "text": "look, roughly it's a few grand for the build, but honestly it depends if we're building for one channel or five|||it's easier to just grab 20 mins with Louis. he'll give you a proper figure straight away and you can decide if it makes sense. want the link?"},
+    {"role": "mark", "text": "look, roughly it's a few grand for the build, but honestly it depends if we're building for one channel or five|||it's easier to just grab 20 mins with Louis. he'll give you a proper figure straight away and you can decide if it makes sense. want the link?"},
     {"role": "lead", "text": "Alright, send it."}
   ]
 }

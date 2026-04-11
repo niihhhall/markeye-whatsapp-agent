@@ -31,7 +31,7 @@ async def export_training_data(format: str = "openai") -> str:
         os.makedirs(export_dir, exist_ok=True)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"albert_training_{timestamp}.jsonl"
+        filename = f"markeye_training_{timestamp}.jsonl"
         filepath = os.path.join(export_dir, filename)
 
         count = 0
@@ -69,7 +69,7 @@ def _format_openai(history: List[Dict[str, str]]) -> Dict[str, Any]:
     messages = []
     
     # Optional: system message should be included if using fine-tuning (usually)
-    # messages.append({"role": "system", "content": "You are Albert, After5's AI sales agent..."})
+    # messages.append({"role": "system", "content": "You are Mark, Markeye's AI sales agent..."})
     
     for msg in history:
         role = "assistant" if msg["role"] == "assistant" else "user"

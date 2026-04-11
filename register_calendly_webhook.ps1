@@ -7,7 +7,7 @@
 
 $TOKEN = "PASTE_YOUR_TOKEN_HERE"   # <-- only thing to change
 
-$WEBHOOK_URL = "https://after5-agent-production.up.railway.app/calendly-webhook"
+$WEBHOOK_URL = "https://YOUR_MARKEYE_URL.railway.app/calendly-webhook"
 $HEADERS = @{
     "Authorization" = "Bearer $TOKEN"
     "Content-Type"  = "application/json"

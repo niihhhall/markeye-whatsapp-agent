@@ -9,9 +9,9 @@
   },
   "conversation": [
     {"role": "lead", "text": "Do you guys do white-labelling or partnerships for other agencies?"},
-    {"role": "albert", "text": "sounds interesting tbh. what have you got in mind? we do work with quite a few agencies actually"},
+    {"role": "mark", "text": "sounds interesting tbh. what have you got in mind? we do work with quite a few agencies actually"},
     {"role": "lead", "text": "We want to offer this to our e-commerce clients."},
-    {"role": "albert", "text": "yeah nice. the e-commerce side is huge for this, especially with cart recovery on WhatsApp|||best to grab 15 mins with Louis so he can walk you through the partnership structure properly. want me to send the link?"},
+    {"role": "mark", "text": "yeah nice. the e-commerce side is huge for this, especially with cart recovery on WhatsApp|||best to grab 15 mins with Louis so he can walk you through the partnership structure properly. want me to send the link?"},
     {"role": "lead", "text": "Yes please."}
   ]
 }

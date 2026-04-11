@@ -25,7 +25,7 @@ TRANSITIONS = {
     },
 }
 
-def check_transition(current_state: ConversationState, session_data: Dict[str, Any]) -> Optional[ConversationState]:
+def check_transition(current_state: ConversationState, session_data: Dict[str, Any], client_config: dict = None) -> Optional[ConversationState]:
     """Evaluates whether a transition should happen."""
     rule = TRANSITIONS.get(current_state)
     if not rule:
@@ -35,6 +35,15 @@ def check_transition(current_state: ConversationState, session_data: Dict[str, A
     bant_scores = session_data.get("bant_scores", {})
     overall_score = bant_scores.get("overall_score", 0)
 
+    # Resolve threshold (Client specific or global default 7)
+    threshold = 7
+    if client_config and client_config.get("bant_criteria"):
+        criteria = client_config["bant_criteria"]
+        threshold = criteria.get("overall_threshold_mark", 7) # Using a dedicated mark threshold
+        if not threshold and criteria.get("overall_threshold"):
+            # If they provided total threshold (e.g. 25/40), convert to 0-10 scale
+            pass 
+    
     if turn_count < rule["min_turns"]:
         return None
 
@@ -48,8 +57,8 @@ def check_transition(current_state: ConversationState, session_data: Dict[str, A
             return rule["next"]
 
     if current_state == ConversationState.QUALIFICATION:
-        # Qualification to Booking if BANT score >= 7
-        if overall_score >= 7:
+        # Qualification to Booking if BANT score >= threshold (default 7)
+        if overall_score >= threshold:
             return ConversationState.BOOKING
 
     # Special handling for WAITING/CLOSED is usually manual or triggered by content

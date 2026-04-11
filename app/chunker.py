@@ -211,7 +211,7 @@ def calculate_blue_tick_delay(last_lead_message_time: float, current_time: float
 
 def calculate_reading_delay(incoming_text: str) -> float:
     """
-    Calculate how long Albert takes to read the incoming message.
+    Calculate how long Mark takes to read the incoming message.
     - 0.04 seconds per character
     - Minimum 4 seconds, maximum 10 seconds
 
@@ -228,7 +228,7 @@ def calculate_reading_delay(incoming_text: str) -> float:
 
 def calculate_typing_delay(text: str) -> float:
     """
-    Calculate cosmetic typing duration for Albert's outgoing message.
+    Calculate cosmetic typing duration for Mark's outgoing message.
     - 0.1 seconds per character
     - Minimum 1.5 seconds
     - No maximum cap, duration scales with character count
@@ -261,7 +261,7 @@ def calculate_typing_delay(text: str) -> float:
 def calculate_think_pause() -> float:
     """
     Pause between finishing reading and starting to type.
-    Simulates Albert thinking about what to say.
+    Simulates Mark thinking about what to say.
     Only applies to the first chunk. Not between subsequent chunks.
     """
     return random.uniform(0.8, 1.2)
@@ -270,7 +270,7 @@ def calculate_think_pause() -> float:
 def calculate_review_pause() -> float:
     """
     Pause between finishing typing and hitting send.
-    Simulates Albert reviewing his message before sending.
+    Simulates Mark reviewing his message before sending.
     Only applies to the first chunk. Not between subsequent chunks.
     """
     return random.uniform(0.3, 0.7)
@@ -353,7 +353,7 @@ def should_interrupt(
     typing_silence_threshold: float = 5.0
 ) -> str:
     """
-    Determine whether Albert should interrupt his current response.
+    Determine whether Mark should interrupt his current response.
     Poll this every 500ms throughout the ENTIRE response sequence
     (reading delay, think pause, typing, review pause, between chunks).
 
@@ -371,7 +371,7 @@ def should_interrupt(
           timer. Go back to stage 1 and reprocess with full conversation
           history including the new message.
 
-        - "pause": Lead is typing. Albert should:
+        - "pause": Lead is typing. Mark should:
           1. Immediately remove typing indicator
           2. Wait and keep polling. One of three things will happen:
              a. Lead sends a message → next poll returns "reprocess"
@@ -379,7 +379,7 @@ def should_interrupt(
              c. Lead types for 20+ seconds without sending → returns "resume"
 
         - "resume": Lead stopped typing without sending, or timed out.
-          Albert should resume from where he paused. If typing indicator
+          Mark should resume from where he paused. If typing indicator
           was showing before, turn it back on and continue.
 
         - "continue": No interruption detected. Keep going with current step.

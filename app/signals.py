@@ -1,5 +1,5 @@
 """
-Buyer signal detection for adjusting Albert's approach.
+Buyer signal detection for adjusting Mark's approach.
 Analyses lead messages to determine interest level and personality type.
 """
 

@@ -201,4 +201,31 @@ class RedisClient:
         except Exception as e:
             print(f"[Redis] ❌ set failed for {key}: {e}", flush=True)
 
+    # Telemetry Helpers
+    async def inc_metric(self, name: str, amount: int = 1):
+        """Atomic counter increment."""
+        try:
+            await self.redis.incrby(f"metrics:{name}", amount)
+        except:
+            pass
+
+    async def get_metrics(self) -> Dict[str, int]:
+        """Fetch all current global metrics."""
+        try:
+            keys = await self.redis.keys("metrics:*")
+            results = {}
+            for k in keys:
+                val = await self.redis.get(k)
+                results[k.replace("metrics:", "")] = int(val) if val else 0
+            return results
+        except:
+            return {}
+            
+    async def log_llm_metric(self, provider: str, tokens: int = 0):
+        """Specialized LLM usage tracker."""
+        await self.inc_metric("total_llm_calls")
+        await self.inc_metric(f"llm_provider:{provider.lower()}")
+        if tokens:
+            await self.inc_metric("total_tokens", tokens)
+
 redis_client = RedisClient()

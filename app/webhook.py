@@ -1,12 +1,14 @@
 import asyncio
 import logging
 import random
+from typing import Optional
 from fastapi import APIRouter, Request, Response, BackgroundTasks
 from app.config import settings
 from app.redis_client import redis_client
 from app.messaging import mark_as_read, send_message, send_chunked_messages, send_typing_indicator
 from app.models import ConversationState
 from app.stt import process_voice_note_from_media_id
+from app.client_manager import client_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -60,6 +62,15 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         contact = value.get("contacts", [{}])[0]
         metadata = value.get("metadata", {})
         
+        # Extract recipient phone (Which of our numbers received the message?)
+        recipient_wa_id = metadata.get("display_phone_number", "")
+        client_config = None
+        if recipient_wa_id:
+            client_config = await client_manager.get_client_by_phone(f"whatsapp:+{recipient_wa_id}")
+            
+        # For direct Baileys messages, the client_id might need to be resolved via Lead
+        # But for Cloud API, we use display_phone_number.
+        
         # Extract fields
         sender_wa_id = message.get("from", "")       # "447700900000"
         sender_name = contact.get("profile", {}).get("name", "")
@@ -109,7 +120,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                         # 24h+ since close — re-open as returning lead
                         logger.info(f"[Webhook] {sender_phone} returning after 24h+ — reopening session.")
                         lead_name = session.get("lead_data", {}).get("first_name", "there")
-                        returning_template = f"Hey {lead_name}, Albert here again from After5. Glad you came back — what changed?"
+                        returning_template = f"Hey {lead_name}, Mark here again from Markeye. Glad you came back — what changed?"
                         # Send template as single message
                         await send_message(sender_phone, returning_template)
                         # Re-initialise session
@@ -186,7 +197,8 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         # background_tasks.add_task(send_typing_indicator, sender_phone, message_id)
         
         # Fire delayed processor (3s rolling timer)
-        background_tasks.add_task(_delayed_buffer_process, sender_phone, batch_id, message_ts)
+        client_id = client_config.get("id") if client_config else None
+        background_tasks.add_task(delayed_buffer_process, sender_phone, batch_id, message_ts, client_id)
         
         # Fire hard-max safety check (8s fixed timer from first message in batch)
         # We only start this if it's the first message of a potentially new batch
@@ -195,33 +207,35 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
             pass
         else:
             # This shouldn't happen because buffer_message sets it, but for safety:
-            background_tasks.add_task(_hard_max_check, sender_phone, message_ts)
+            background_tasks.add_task(hard_max_check, sender_phone, message_ts, client_id)
         
         # Tracker Log in background
-        background_tasks.add_task(_background_tracker_log, sender_phone, sender_name, message_text)
+        background_tasks.add_task(background_tracker_log, sender_phone, sender_name, message_text, client_id)
         
         return {"status": "ok"}
         
     except Exception as e:
         logger.error(f"Webhook error: {e}", exc_info=True)
+        import sentry_sdk
+        sentry_sdk.capture_exception(e)
         return {"status": "error"}
 
 
-async def _background_tracker_log(phone: str, name: str, message: str):
+async def background_tracker_log(phone: str, name: str, message: str, client_id: Optional[str] = None):
     """Logs incoming message to Supabase in the background."""
     try:
-        from app.tracker import AlbertTracker
-        tracker = AlbertTracker()
+        from app.tracker import MarkTracker
+        tracker = MarkTracker()
         lead = await tracker.get_lead_by_phone(phone)
         if not lead:
-            lead = await tracker.create_lead(phone=phone, first_name=name)
+            lead = await tracker.create_lead(phone=phone, first_name=name, client_id=client_id)
         if lead:
-            await tracker.log_inbound(lead["id"], message)
+            await tracker.log_inbound(lead["id"], message, client_id=client_id)
     except Exception as e:
         logger.error("[Webhook] Background Tracker failed: %s", e)
 
 
-async def _delayed_buffer_process(phone: str, batch_id: str, last_message_ts: float = 0):
+async def delayed_buffer_process(phone: str, batch_id: str, last_message_ts: float = 0, client_id: Optional[str] = None):
     """
     Wait. If no new messages arrived (batch_id still current),
     process the buffer. If new message arrived, this timer dies silently.
@@ -242,10 +256,10 @@ async def _delayed_buffer_process(phone: str, batch_id: str, last_message_ts: fl
     combined = await redis_client.get_and_clear_buffer(phone)
     if combined:
         logger.info(f"Buffer ready for {phone}: {combined[:80]}...")
-        asyncio.create_task(_process_with_interrupt_protection(phone, combined, last_message_ts=last_message_ts))
+        asyncio.create_task(process_with_interrupt_protection(phone, combined, last_message_ts=last_message_ts, client_id=client_id))
 
 
-async def _hard_max_check(phone: str, last_message_ts: float = 0):
+async def hard_max_check(phone: str, last_message_ts: float = 0, client_id: Optional[str] = None):
     """Hard max safety — force process even if messages still arriving."""
     await asyncio.sleep(settings.INPUT_BUFFER_MAX_SECONDS)
     
@@ -257,14 +271,15 @@ async def _hard_max_check(phone: str, last_message_ts: float = 0):
         combined = await redis_client.get_and_clear_buffer(phone)
         if combined:
             logger.info(f"Hard max hit for {phone}, force-processing")
-            asyncio.create_task(_process_with_interrupt_protection(phone, combined, last_message_ts=last_message_ts))
+            asyncio.create_task(process_with_interrupt_protection(phone, combined, last_message_ts=last_message_ts, client_id=client_id))
 
 
-async def _process_with_interrupt_protection(
+async def process_with_interrupt_protection(
     phone: str, 
     combined_text: str, 
     retry_count: int = 0,
-    last_message_ts: float = 0
+    last_message_ts: float = 0,
+    client_id: Optional[str] = None
 ):
     """
     Generate reply with interrupt protection.
@@ -294,7 +309,8 @@ async def _process_with_interrupt_protection(
             phone, 
             combined_text, 
             message_id=last_msg_id or "", 
-            last_message_ts=last_message_ts
+            last_message_ts=last_message_ts,
+            client_id=client_id
         )
         
         # 5. Interrupt Check (Layer 3)

@@ -5,17 +5,21 @@ from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from openai import AsyncOpenAI
 from app.config import settings
-from app.tracker import AlbertTracker
+from app.tracker import MarkTracker
 from app.conversation_library import get_relevant_example
 from app.signals import detect_personality_type, detect_objection_type
 from app.redis_client import redis_client
 
-tracker = AlbertTracker()
+from app.llm_router import llm_router
+from app.middleware import log_llm_call
+import json
+
+tracker = MarkTracker()
 
 def _compute_scoring_status(session: dict, current_message: str) -> str:
     """
-    V4: Keyword-based qualification gate.
-    All three signals must be present before Albert is allowed to push for booking.
+    Keyword-based qualification gate.
+    All three signals must be present before Mark is allowed to push for booking.
     """
     current_state = session.get('state', 'opening')
 
@@ -57,54 +61,20 @@ def _compute_scoring_status(session: dict, current_message: str) -> str:
 
 class LLMClient:
     def __init__(self):
-        self.api_key = settings.OPENROUTER_API_KEY
-        self.helicone_key = settings.HELICONE_API_KEY
+        # We now use the router instead of a direct client
+        self.router = llm_router
 
-    def _get_client(self, lead_id: Optional[str], conversation_state: str, phone: str = "", company: str = "") -> AsyncOpenAI:
-        """Helper to create a Helicone-instrumented OpenAI client."""
-        # Coerce None values to empty strings — HTTP headers cannot be None
-        safe_lead_id = lead_id or ""
-        safe_phone = phone or ""
-        safe_company = company or ""
-        safe_state = conversation_state or "Opening"
-
-        headers = {
-            "HTTP-Referer": "https://after5.digital",
-            "X-Title": "Albert by After5",
-        }
-        
-        if self.helicone_key:
-            headers.update({
-                "Helicone-Auth": f"Bearer {self.helicone_key}",
-                "Helicone-User-Id": safe_lead_id,
-                "Helicone-Session-Id": f"conv_{safe_lead_id}",
-                "Helicone-Property-Lead-Id": safe_lead_id,
-                "Helicone-Property-Phone": safe_phone,
-                "Helicone-Property-Company": safe_company,
-                "Helicone-Property-State": safe_state,
-                "Helicone-Property-Agent": "Albert",
-                "Helicone-Property-Platform": "After5",
-            })
-            base_url = "https://openrouter.helicone.ai/api/v1"
-        else:
-            base_url = "https://openrouter.ai/api/v1"
-
-        return AsyncOpenAI(
-            base_url=base_url,
-            api_key=self.api_key,
-            default_headers=headers
-        )
-
-    def _estimate_cost(self, model: str, prompt_tokens: int, completion_tokens: int) -> float:
-        """Estimates USD cost based on token usage."""
+    def _estimate_cost(self, provider: str, model: str, prompt_tokens: int, completion_tokens: int) -> float:
+        """Estimates USD cost based on token usage. Free tiers return 0.0."""
+        if provider in ["Groq", "Gemini", "Cerebras"]:
+            return 0.0  # Currently using free/fair-use tiers
+            
         pricing = {
-            "openai/gpt-4o":               {"prompt": 2.50,  "completion": 10.00},
-            "openai/gpt-4o-mini":          {"prompt": 0.15,  "completion": 0.60},
-            "anthropic/claude-3.5-sonnet": {"prompt": 3.00,  "completion": 15.00},
-            "anthropic/claude-3-haiku":    {"prompt": 0.25,  "completion": 1.25},
+            "gpt-4o":               {"prompt": 2.50,  "completion": 10.00},
+            "gpt-4o-mini":          {"prompt": 0.15,  "completion": 0.60},
         }
-        # Default to gpt-4o rates if model not found
-        rates = pricing.get(model, {"prompt": 2.50, "completion": 10.00})
+        # Default to gpt-4o-mini rates if model not found
+        rates = pricing.get(model, {"prompt": 0.15, "completion": 0.60})
         total = (prompt_tokens * rates["prompt"] + completion_tokens * rates["completion"]) / 1_000_000
         return round(total, 6)
 
@@ -116,30 +86,43 @@ class LLMClient:
         conversation_state: str = "Opening",
         phone: str = "",
         company: str = "",
+        client_config: Optional[dict] = None,
         **kwargs
     ) -> str:
-        """Calls OpenRouter via Helicone proxy and logs to Supabase."""
-        model = model or settings.OPENROUTER_PRIMARY_MODEL
-        client = self._get_client(lead_id, conversation_state, phone, company)
-        
-        start_time = time.time()
+        """Calls the SmartLLMRouter and logs to Supabase via the Tracker."""
         try:
-            response = await client.chat.completions.create(
-                model=model,
+            # The router handles the fallback logic (Groq -> Gemini -> Cerebras)
+            result = await self.router.generate_completion(
                 messages=messages,
+                model_override=model,
                 **kwargs
             )
-            latency_ms = int((time.time() - start_time) * 1000)
             
-            content = response.choices[0].message.content
-            usage = response.usage
-            cost = self._estimate_cost(model, usage.prompt_tokens, usage.completion_tokens)
+            content = result["content"]
+            model_used = result["model"]
+            provider = result["provider"]
+            usage = result["usage"]
+            latency_ms = result["latency_ms"]
+            
+            # Prepare metadata for training tracking
+            metadata = {
+                "provider": provider,
+                "model": model_used,
+                "latency_ms": latency_ms,
+                "tokens_in": usage.prompt_tokens if usage else 0,
+                "tokens_out": usage.completion_tokens if usage else 0,
+                "tokens_total": usage.total_tokens if usage else 0,
+                "conversation_state": conversation_state
+            }
+
+            cost = self._estimate_cost(provider, model_used, usage.prompt_tokens, usage.completion_tokens)
 
             # Log to Supabase Tracker
+            # We repurpose helicone_id field to store the provider name for now
             await tracker.log_llm_call(
                 lead_id=lead_id,
-                response_id=response.id,
-                model=model,
+                response_id=f"{provider}:{result['id']}",
+                model=model_used,
                 prompt_tokens=usage.prompt_tokens,
                 completion_tokens=usage.completion_tokens,
                 cost_usd=cost,
@@ -147,30 +130,49 @@ class LLMClient:
                 conversation_state=conversation_state,
             )
             
+            # Structured Logging & Metrics
+            await redis_client.log_llm_metric(provider, usage.total_tokens if usage else 0)
+            log_llm_call(
+                provider=provider,
+                model=model_used,
+                latency_ms=latency_ms,
+                tokens_in=usage.prompt_tokens if usage else 0,
+                tokens_out=usage.completion_tokens if usage else 0,
+                success=True,
+                client_id=lead_id or "unknown"
+            )
+
+            # Store metadata in Redis briefly so the caller (conversation.py) can pick it up for log_outbound
+            if phone:
+                try:
+                    await redis_client.redis.setex(f"last_llm_usage:{phone}", 30, json.dumps(metadata))
+                except Exception as e:
+                    logger.warning(f"[LLM] Error saving usage to Redis: {e}")
+
             return content
 
         except Exception as e:
-            print(f"[LLM Error] {model} call failed: {e}")
-            # Simple fallback if primary fails
-            if model != settings.OPENROUTER_FALLBACK_MODEL:
-                print(f"[LLM] Falling back to {settings.OPENROUTER_FALLBACK_MODEL}")
-                return await self.call_llm(
-                    messages, 
-                    model=settings.OPENROUTER_FALLBACK_MODEL,
-                    lead_id=lead_id,
-                    conversation_state=conversation_state,
-                    phone=phone,
-                    company=company,
-                    **kwargs
-                )
+            print(f"[LLM Client Error] Router failed all providers: {e}")
             raise e
 
-    async def build_context(self, session: Dict[str, Any], lead_data: Dict[str, Any], message: str, knowledge_context: str = "") -> List[Dict[str, str]]:
-        """Builds the full LLM context using V4 system prompt + RAG."""
-        # Always load static system prompt from file
-        prompt_path = os.path.join(os.getcwd(), "prompts", "system_prompt.txt")
-        with open(prompt_path, "r", encoding="utf-8") as f:
-            core_prompt = f.read()
+    async def build_context(
+        self, 
+        session: Dict[str, Any], 
+        lead_data: Dict[str, Any], 
+        message: str, 
+        knowledge_context: str = "",
+        client_config: Optional[dict] = None
+    ) -> List[Dict[str, str]]:
+        """Builds the full LLM context using client_prompt or V4 system prompt."""
+        # Multi-tenant: load client specific prompt or fallback to file
+        core_prompt = ""
+        if client_config and client_config.get("system_prompt"):
+            core_prompt = client_config.get("system_prompt")
+        else:
+            prompt_path = os.path.join(os.getcwd(), "prompts", "system_prompt.txt")
+            with open(prompt_path, "r", encoding="utf-8") as f:
+                core_prompt = f.read()
+            
         industry_context = ""
         industry = (lead_data.get("industry") or "").lower()
         industry_map = {
@@ -295,7 +297,7 @@ class LLMClient:
         if history:
             history_lines = []
             for msg in history:
-                role_label = "Lead" if msg["role"] == "user" else "Albert"
+                role_label = "Lead" if msg["role"] == "user" else "Mark"
                 history_lines.append(f"{role_label}: {msg['content']}")
             formatted_history = "\n".join(history_lines)
         else:
@@ -312,7 +314,8 @@ class LLMClient:
             "{{lead_company_summary}}": lead_data.get("form_message", ""),
             "{{current_state}}": current_state_val,
             "{{scoring_status}}": scoring_status,
-            "{{calendly_link}}": settings.CALENDLY_LINK,
+            "{{calendly_link}}": client_config.get("calendly_link") if client_config else settings.CALENDLY_LINK,
+            "{{business_name}}": client_config.get("business_name") if client_config else "Markeye",
             "{{bant_scores}}": str(session.get("bant_scores", {})),
             "{{current_datetime}}": current_datetime,
             "{{conversation_history}}": formatted_history,
@@ -322,8 +325,46 @@ class LLMClient:
             system_prompt = system_prompt.replace(key, str(value))
 
         messages = [{"role": "system", "content": system_prompt}]
-        for msg in session.get("history", []):
+        
+        # 4. Sliding Window & Summarization (V8)
+        full_history = session.get("history", [])
+        MAX_CONTEXT = 10
+        
+        if len(full_history) > MAX_CONTEXT:
+            logger.info(f"[LLM] 💨 History > {MAX_CONTEXT}. Summarizing older turns for {lead_id}...")
+            
+            # Check for cached summary
+            summary_key = f"summary:{lead_id}"
+            summary = await redis_client.redis.get(summary_key)
+            
+            if not summary:
+                # Summarize turns before the last 10
+                to_summarize = full_history[:-MAX_CONTEXT]
+                summary_prompt = (
+                    "Summarize this sales conversation in 2-3 sentences. "
+                    "Include: lead name, business type, pain points, and any BANT signals detected."
+                )
+                history_text = "\n".join([f"{m['role']}: {m['content']}" for m in to_summarize])
+                
+                # Use Gemini-Flash for cheap summarization
+                summary_res = await self.router.generate_completion(
+                    messages=[
+                        {"role": "system", "content": summary_prompt},
+                        {"role": "user", "content": f"History to summarize:\n{history_text}"}
+                    ],
+                    model_override=settings.GEMINI_MODEL
+                )
+                summary = summary_res["content"]
+                await redis_client.redis.setex(summary_key, 3600, summary) # Cache for 1h
+                
+            messages.append({"role": "system", "content": f"═══ EARLIER CONVERSATION SUMMARY ═══\n{summary}"})
+            recent_context = full_history[-MAX_CONTEXT:]
+        else:
+            recent_context = full_history
+
+        for msg in recent_context:
             messages.append(msg)
+            
         messages.append({"role": "user", "content": message})
         
         return messages

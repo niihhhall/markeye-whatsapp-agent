@@ -9,7 +9,7 @@
   },
   "conversation": [
     {"role": "lead", "text": "Price?"},
-    {"role": "albert", "text": "scope based. typically under a month of ad spend, 50/50 split. Louis gives an exact figure on a 20 min call. want the link?"},
+    {"role": "mark", "text": "scope based. typically under a month of ad spend, 50/50 split. Louis gives an exact figure on a 20 min call. want the link?"},
     {"role": "lead", "text": "Send it."}
   ]
 }

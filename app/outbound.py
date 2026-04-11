@@ -11,20 +11,26 @@ from app.whatsapp_client import (
 )
 from app.redis_client import redis_client
 from app.models import ConversationState
-from app.tracker import AlbertTracker
+from app.tracker import MarkTracker
 from app.chunker import chunk_message, calculate_typing_delay, format_message
 from app.templates import OUTREACH_TEMPLATES, FOLLOW_UP_TEMPLATE
 from app.phone_utils import normalize_phone
 from app.name_utils import clean_personal_name, clean_company_name
+from app.client_manager import client_manager
 import random
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-async def send_initial_outreach(name_raw: str, phone_raw: str, company_raw: str, form_data: dict = None):
+async def send_initial_outreach(name_raw: str, phone_raw: str, company_raw: str, form_data: dict = None, client_id: str = None):
     """Sends the first outbound message after a delay."""
     try:
-        tracker = AlbertTracker()
+        tracker = MarkTracker()
+        
+        # Resolve Client Config
+        client_config = None
+        if client_id:
+            client_config = await client_manager.get_client_by_id(client_id)
         
         # Normalize name and company for display and storage
         name = clean_personal_name(name_raw)
@@ -41,7 +47,8 @@ async def send_initial_outreach(name_raw: str, phone_raw: str, company_raw: str,
                 first_name=name, 
                 company=company, 
                 lead_source=form_data.get("source", "Website Demo Form") if form_data else "Website Demo Form",
-                form_message=form_data.get("message", "") if form_data else ""
+                form_message=form_data.get("message", "") if form_data else "",
+                client_id=client_id
             )
         
         lead_id = lead.get("id") if lead else "unknown"
@@ -53,11 +60,16 @@ async def send_initial_outreach(name_raw: str, phone_raw: str, company_raw: str,
             await asyncio.sleep(15)
         
         # 3. Outreach Content
-        raw_template = random.choice(OUTREACH_TEMPLATES)
-        first_message_content = raw_template.format(name=name, company_name=company)
+        if client_config and client_config.get("greeting_message"):
+            business_name = client_config.get("business_name", "Markeye")
+            greeting_tpl = client_config.get("greeting_message")
+            first_message_content = greeting_tpl.format(business_name=business_name, name=name)
+        else:
+            raw_template = random.choice(OUTREACH_TEMPLATES)
+            first_message_content = raw_template.format(name=name, company_name=company)
         
         # 4. Attempt Template Outreach (Highly Recommended for WhatsApp Cloud API)
-        template_name = "after5_outreach"
+        template_name = "markeye_outreach"
         components = [
             {
                 "type": "body",
@@ -103,12 +115,12 @@ async def send_initial_outreach(name_raw: str, phone_raw: str, company_raw: str,
         # 7. Update conversation state in Supabase
         state_label = "Discovery" if target_state == ConversationState.DISCOVERY else "Opening"
         await tracker.update_state(lead_id, state_label)
-
+        
         # 8. Delivery (now happening after session is safe)
         if template_res:
             logger.info("[Outreach] ✅ Template sent successfully via WhatsApp Cloud API")
             # Log to Supabase (already logged to session history)
-            await tracker.log_outbound(lead_id, first_message_content)
+            await tracker.log_outbound(lead_id, first_message_content, client_id=client_id)
         else:
             if not is_sim:
                 logger.warning("[Outreach] ⚠️ Template send failed. Falling back to raw text.")
@@ -121,14 +133,14 @@ async def send_initial_outreach(name_raw: str, phone_raw: str, company_raw: str,
             await send_chunked_messages(sender_phone, chunks, interruptible=False)
             
             # Log to Supabase
-            await tracker.log_outbound(lead_id, first_message_content)
+            await tracker.log_outbound(lead_id, first_message_content, client_id=client_id)
 
     except Exception as e:
         logger.error("[Outreach] 🚨 Failed to send initial outreach for %s: %s", phone_raw, e, exc_info=True)
 
 @router.post("/send-outbound")
 async def send_outbound(lead: LeadCreate, background_tasks: BackgroundTasks = None):
-    asyncio.create_task(send_initial_outreach(lead.name, lead.phone, lead.company))
+    asyncio.create_task(send_initial_outreach(lead.name, lead.phone, lead.company, client_id=lead.client_id))
     return {"status": "outreach_scheduled"}
 
 @router.post("/form-webhook")
@@ -137,17 +149,18 @@ async def form_webhook(payload: dict):
     name = payload.get("first_name") or payload.get("name")
     phone = payload.get("phone")
     company = payload.get("company", "your business")
+    client_id = payload.get("client_id")
     
     if not name or not phone:
         return {"error": "name and phone required"}
         
-    asyncio.create_task(send_initial_outreach(name, phone, company, payload))
+    asyncio.create_task(send_initial_outreach(name, phone, company, payload, client_id=client_id))
     return {"status": "outreach_scheduled"}
 
 async def send_follow_up_message(lead_id: str, name: str, phone: str):
     """Sends the 24-hour follow-up message."""
     try:
-        tracker = AlbertTracker()
+        tracker = MarkTracker()
         
         # 1. Formatting the follow-up content
         follow_up_content = FOLLOW_UP_TEMPLATE.format(name=name)

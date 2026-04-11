@@ -1,50 +1,104 @@
-# After5 WhatsApp AI Agent
+# 👁️ Markeye Mark: AI SDR Infrastructure v2.0.0
 
-This is a complete WhatsApp AI sales agent project for After5 Digital.
+![Markeye Mark](markeye_readme_header_1775911388041.png)
 
-## Features
-1. Receives incoming WhatsApp messages via Twilio webhook.
-2. Manages conversation state (Opening → Discovery → Qualification → Booking → Escalation).
-3. Calls an LLM via OpenRouter to generate natural responses.
-4. Sends replies back through Twilio.
-5. Extracts BANT scores (Budget, Authority, Need, Timeline) in the background.
-6. Tracks everything in Supabase.
-7. Uses Redis for session state and conversation memory.
-8. Supports message chunking (splitting long replies into multiple WhatsApp messages with delays).
-9. Supports input buffering (waits for user to stop typing before replying).
-10. Fires typing indicator before every reply.
+> **High-Agency Pipeline for Predictable Growth.**
+> 
+> Mark is a production-grade AI SDR infrastructure designed to handle inbound lead qualification, real-time interactive engagement, and automated sales orchestration with zero-cost inference and zero-latency execution.
 
-## Tech Stack
-- Python 3.11
-- FastAPI (async)
-- Twilio WhatsApp API
-- OpenRouter for LLM calls (supports Claude, GPT-4o, Gemini, etc.)
-- Redis for session state, conversation history, dedup, and input buffering
-- Supabase for persistent storage (leads, messages, status)
-- Helicone for LLM observability (optional proxy)
-- Deployed on Railway
+---
 
-## Quick Start
-1. Clone the repository.
-2. Install dependencies: `pip install -r requirements.txt`.
-3. Set your environment variables (see `.env.example`).
-4. Run the app: `uvicorn main:app --reload`.
+## 🚀 The v2.0.0 Alpha Rebuild
 
-## Environment Variables
-Check `.env.example` for the full list of required variables.
+This version represents a total architectural pivot from a basic bot to a scalable, multi-tenant AI infrastructure.
 
-## API Endpoints
-- `GET /`: Health check.
-- `POST /webhook`: Twilio webhook handler.
-- `POST /send-outbound`: Outbound message sender.
-- `POST /form-webhook`: For n8n/website form submissions.
+### 🧠 Intelligence & Orchestration
+- **Smart LLM Router**: Dynamic fallback between **Groq**, **Cerebras**, and **Gemini**. High performance with practically zero operational cost.
+- **Trigger-Action Engine**: LLM-driven execution of interactive polls, pricing delivery, and human sales escalations.
+- **Semantic Cache**: Vecto-base cache for lightning-fast responses to common intents, bypassing LLM costs and latency.
+- **High-Agency BANT**: Context-aware qualification that moves at the speed of human conversation.
 
-## Architecture Overview
-1.  **Webhook**: Incoming message is received.
-2.  **Buffering**: Input is buffered in Redis to handle multiple messages.
-3.  **Processing**: Conversation engine is triggered after buffer timeout.
-4.  **LLM Call**: Context is built and OpenRouter is called.
-5.  **Chunking**: Response is split into multiple messages if needed.
-6.  **Delivery**: Messages are sent via Twilio with typing indicators.
-7.  **BANT Extraction**: Qualification signals are extracted in the background.
-8.  **Logging**: Everything is saved to Supabase for persistent tracking.
+### 📱 WhatsApp Mastery (Baileys v2)
+- **Interactive Polls**: Friction-less lead qualification via WhatsApp-native multi-choice interactions.
+- **Remote Onboarding**: Authentication via Pairing Codes — no physical QR scanning required.
+- **Media Cloud-Sync**: Inbound images, docs, and voice notes are automatically uploaded to **Supabase Storage** and served via public URLs.
+- **Natural Touch**: Probabilistic reactions (`👍`), human typing delays, and rich link previews for Calendly.
+
+### 🏗️ Infrastructure & Scale
+- **Multi-Tenant Architecture**: One deployment serves unlimited clients with isolated branding, system prompts, and knowledge bases.
+- **Docker Orchestration**: Unified Compose setup for FastAPI (Conversation Engine) and Node.js (WhatsApp Sidecar).
+- **Training Pipeline**: Automated pipeline for collecting, labeling, and exporting conversation data for fine-tuning.
+- **Production Guardrails**: Instrumented with **Sentry** (telemetry) and **Redis** (atomic execution).
+
+---
+
+## 🛠️ Architecture
+
+```mermaid
+graph TD
+    User((WhatsApp User)) <--> B(Baileys Sidecar)
+    B <--> R[(Redis Sync)]
+    R <--> F[FastAPI Engine]
+    F <--> S[(Supabase)]
+    F <--> L[LLM Router]
+    L --- G[Groq]
+    L --- C[Cerebras]
+    L --- Ge[Gemini]
+    F <--> K[Knowledge Base]
+```
+
+---
+
+## 🚦 Quickstart
+
+### 1. Environment Setup
+Clone the repo and configure your `.env` (see `.env.example` for the full schema).
+
+```bash
+# Core Credentials
+REDIS_URL=redis://localhost:6379
+SUPABASE_URL=your_url
+SUPABASE_KEY=your_key
+
+# Choose your path
+AUTH_MODE=qr # or pairing
+```
+
+### 2. Launch
+The platform is fully containerized for one-click deployment.
+
+```bash
+docker-compose up --build -d
+```
+
+### 3. Monitoring
+Access logs via Docker or monitor real-time exceptions and latency through Sentry.
+
+```bash
+docker-compose logs -f fastapi
+```
+
+---
+
+## 🎯 Trigger Tags (For AI Orchestration)
+
+Mark can execute complex maneuvers mid-conversation. Just include these tags in the system prompt:
+
+- `[SEND_BOOKING_POLL]` — Launch interactive scheduling.
+- `[SEND_PRICING]` — Dispatch sales collateral.
+- `[SEND_CALENDLY]` — Drop a rich link preview.
+- `[ESCALATE]` — Hand over to a human rep.
+
+---
+
+## 📈 Roadmap & ROI
+- [x] Multi-tenant Client Management
+- [x] Zero-Cost LLM Fallback (Smart Router)
+- [x] Supabase Storage Ingestion
+- [ ] Voice-to-Voice Realtime (Next)
+- [ ] Financial ROI Dashboard (In Progress)
+
+---
+
+**Built by the Markeye Engineering Team.**  
+*Shift from manual outreach to scalable infrastructure.*

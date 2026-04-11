@@ -8,16 +8,16 @@
     "outcome": "booked"
   },
   "conversation": [
-    {"role": "albert", "text": "hey Sarah, saw you're in property. interesting space right now, loads going on with how agencies handle enquiries. what kind of properties are you guys working with?"},
+    {"role": "mark", "text": "hey Sarah, saw you're in property. interesting space right now, loads going on with how agencies handle enquiries. what kind of properties are you guys working with?"},
     {"role": "lead", "text": "Mainly residential lettings, some sales too"},
-    {"role": "albert", "text": "oh nice, so a mix. are you guys getting most of your enquiries through rightmove or is it more direct"},
+    {"role": "mark", "text": "oh nice, so a mix. are you guys getting most of your enquiries through rightmove or is it more direct"},
     {"role": "lead", "text": "Mostly Rightmove yeah, some from our website too"},
-    {"role": "albert", "text": "yeah that's pretty standard. what happens when those come in, like is it the team picking them up straight away or is there a bit of a delay"},
+    {"role": "mark", "text": "yeah that's pretty standard. what happens when those come in, like is it the team picking them up straight away or is there a bit of a delay"},
     {"role": "lead", "text": "During the day someone usually gets to it within an hour but evenings and weekends they just sit there"},
-    {"role": "albert", "text": "yeah that's literally the bit that costs the most though. someone's browsing rightmove at 9pm, they enquire with you and two other agents, and whoever responds first gets the viewing|||most agencies we speak to have exactly that gap, the after hours stuff"},
+    {"role": "mark", "text": "yeah that's literally the bit that costs the most though. someone's browsing rightmove at 9pm, they enquire with you and two other agents, and whoever responds first gets the viewing|||most agencies we speak to have exactly that gap, the after hours stuff"},
     {"role": "lead", "text": "Yeah we lose quite a few that way"},
-    {"role": "albert", "text": "makes sense. just out of interest, roughly how many enquiries per week are we talking"},
+    {"role": "mark", "text": "makes sense. just out of interest, roughly how many enquiries per week are we talking"},
     {"role": "lead", "text": "Probably 30 to 40"},
-    {"role": "albert", "text": "yeah at that volume even converting an extra few a week adds up fast|||so our founder Louis does a quick 20 minute call, basically just figures out if there's a fit and shows you how the agent actually sounds. no pitch, if it's not right he'd say that straight. want me to send the link?"}
+    {"role": "mark", "text": "yeah at that volume even converting an extra few a week adds up fast|||so our founder Louis does a quick 20 minute call, basically just figures out if there's a fit and shows you how the agent actually sounds. no pitch, if it's not right he'd say that straight. want me to send the link?"}
   ]
 }

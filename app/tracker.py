@@ -1,6 +1,6 @@
 """
-AlbertTracker — writes all Albert activity to Supabase
-so the After5 dashboard can display it in real time.
+MarkTracker — writes all Mark activity to Supabase
+so the Markeye dashboard can display it in real time.
 """
 
 import asyncio
@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from app.supabase_client import supabase_client
 
-class AlbertTracker:
+class MarkTracker:
     # ─── LEADS ───────────────────────────────────────────────
 
     async def create_lead(
@@ -22,8 +22,9 @@ class AlbertTracker:
         industry: str = "",
         lead_source: str = "Other",
         form_message: str = "",
+        client_id: Optional[str] = None
     ) -> dict:
-        """Call when a new lead submits the form or contacts Albert for the first time."""
+        """Call when a new lead submits the form or contacts Mark for the first time."""
         try:
             # Check if lead already exists (duplicate phone)
             existing = await self.get_lead_by_phone(phone)
@@ -40,6 +41,7 @@ class AlbertTracker:
                 "industry": industry,
                 "lead_source": lead_source,
                 "form_message": form_message,
+                "client_id": client_id,
                 "temperature": "Cold",
                 "outcome": "In Progress",
                 "signal_score": 0,
@@ -48,11 +50,11 @@ class AlbertTracker:
             if result.data:
                 lead = result.data[0]
                 await self._init_conversation_state(lead["id"])
-                print(f"[Albert Tracker] ✅ Lead created: {first_name} {last_name} ({phone})")
+                print(f"[Mark Tracker] ✅ Lead created: {first_name} {last_name} ({phone})")
                 return lead
 
         except Exception as e:
-            print(f"[Albert Tracker Error] create_lead: {e}")
+            print(f"[Markeye Tracker Error] create_lead: {e}")
         return {}
 
     async def get_lead_by_phone(self, phone: str) -> Optional[dict]:
@@ -66,28 +68,31 @@ class AlbertTracker:
                 end = asyncio.get_event_loop().time()
                 
                 if attempt > 0:
-                    print(f"[Albert Tracker] ♻️ Retry {attempt} success in {end-start:.2f}s", flush=True)
+                    print(f"[Mark Tracker] ♻️ Retry {attempt} success in {end-start:.2f}s", flush=True)
                 
                 return result.data[0] if result.data else None
             except Exception as e:
-                print(f"[Albert Tracker Error] get_lead_by_phone (attempt {attempt+1}): {e}", flush=True)
+                print(f"[Markeye Tracker Error] get_lead_by_phone (attempt {attempt+1}): {e}", flush=True)
                 if attempt < max_retries:
                     await asyncio.sleep(1) # Small pause before retry
                 else:
                     return None
 
-    async def get_all_leads(self) -> list:
+    async def get_all_leads(self, client_id: Optional[str] = None) -> list:
         """Fetch all leads to display in the admin panel."""
         try:
             client = await supabase_client.get_client()
-            result = await client.table("leads").select("id, phone, first_name, last_name, temperature").order("created_at", desc=True).execute()
+            query = client.table("leads").select("id, phone, first_name, last_name, temperature")
+            if client_id:
+                query = query.eq("client_id", client_id)
+            result = await query.order("created_at", desc=True).execute()
             return result.data if result.data else []
         except Exception as e:
-            print(f"[Albert Tracker Error] get_all_leads: {e}")
+            print(f"[Markeye Tracker Error] get_all_leads: {e}")
             return []
 
     async def update_signal_score(self, lead_id: str, score: int) -> None:
-        """Call whenever Albert recalculates lead quality. Score: 0–10."""
+        """Call whenever Mark recalculated lead quality. Score: 0–10."""
         if not lead_id or lead_id == "unknown":
             return
         try:
@@ -97,7 +102,7 @@ class AlbertTracker:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", lead_id).execute()
         except Exception as e:
-            print(f"[Albert Tracker Error] update_signal_score: {e}")
+            print(f"[Markeye Tracker Error] update_signal_score: {e}")
 
     async def update_temperature(self, lead_id: str, temperature: str) -> None:
         """temperature: 'Cold' | 'Warm' | 'Hot'"""
@@ -110,7 +115,7 @@ class AlbertTracker:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", lead_id).execute()
         except Exception as e:
-            print(f"[Albert Tracker Error] update_temperature: {e}")
+            print(f"[Markeye Tracker Error] update_temperature: {e}")
 
     async def update_outcome(self, lead_id: str, outcome: str) -> None:
         """outcome: 'In Progress' | 'Not Interested' | 'Disqualified' | 'Meeting Booked'"""
@@ -123,44 +128,48 @@ class AlbertTracker:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", lead_id).execute()
         except Exception as e:
-            print(f"[Albert Tracker Error] update_outcome: {e}")
+            print(f"[Markeye Tracker Error] update_outcome: {e}")
 
     # ─── MESSAGES ────────────────────────────────────────────
 
-    async def log_inbound(self, lead_id: str, content: str) -> dict:
-        """Call every time a lead sends Albert a WhatsApp message."""
+    async def log_inbound(self, lead_id: str, content: str, client_id: Optional[str] = None, metadata: Optional[dict] = None) -> dict:
+        """Call every time a lead sends Mark a WhatsApp message."""
         if not lead_id or lead_id == "unknown":
             return {}
         try:
             client = await supabase_client.get_client()
             result = await client.table("messages").insert({
                 "lead_id": lead_id,
+                "client_id": client_id,
                 "direction": "inbound",
                 "content": content,
+                "metadata": metadata or {}
             }).execute()
             await self._increment_message_count(lead_id)
             await self._update_last_active(lead_id)
             return result.data[0] if result.data else {}
         except Exception as e:
-            print(f"[Albert Tracker Error] log_inbound: {e}")
+            print(f"[Markeye Tracker Error] log_inbound: {e}")
             return {}
 
-    async def log_outbound(self, lead_id: str, content: str) -> dict:
-        """Call every time Albert sends a WhatsApp reply."""
+    async def log_outbound(self, lead_id: str, content: str, client_id: Optional[str] = None, metadata: Optional[dict] = None) -> dict:
+        """Call every time Mark sends a WhatsApp reply."""
         if not lead_id or lead_id == "unknown":
             return {}
         try:
             client = await supabase_client.get_client()
             result = await client.table("messages").insert({
                 "lead_id": lead_id,
+                "client_id": client_id,
                 "direction": "outbound",
-                "content": content
+                "content": content,
+                "metadata": metadata or {}
             }).execute()
             await self._increment_message_count(lead_id)
             await self._update_last_active(lead_id)
             return result.data[0] if result.data else {}
         except Exception as e:
-            print(f"[Albert Tracker Error] log_outbound: {e}")
+            print(f"[Markeye Tracker Error] log_outbound: {e}")
             return {}
 
     # ─── CONVERSATION STATE ───────────────────────────────────
@@ -197,7 +206,7 @@ class AlbertTracker:
             client = await supabase_client.get_client()
             await client.table("conversation_state").upsert(payload, on_conflict="lead_id").execute()
         except Exception as e:
-            print(f"[Albert Tracker Error] update_state: {e}")
+            print(f"[Markeye Tracker Error] update_state: {e}")
 
     async def set_typing_status(self, lead_id: str, is_typing: bool) -> None:
         """Updates the is_typing field in conversation_state."""
@@ -210,7 +219,7 @@ class AlbertTracker:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("lead_id", lead_id).execute()
         except Exception as e:
-            print(f"[Albert Tracker Error] set_typing_status: {e}")
+            print(f"[Markeye Tracker Error] set_typing_status: {e}")
 
     # ─── BOOKINGS ─────────────────────────────────────────────
 
@@ -234,10 +243,10 @@ class AlbertTracker:
             # Auto-update lead outcome and conversation state
             await self.update_outcome(lead_id, "Meeting Booked")
             await self.update_state(lead_id, "Confirmed")
-            print(f"[Albert Tracker] ✅ Booking confirmed for lead {lead_id}")
+            print(f"[Mark Tracker] ✅ Booking confirmed for lead {lead_id}")
             return result.data[0] if result.data else {}
         except Exception as e:
-            print(f"[Albert Tracker Error] confirm_booking: {e}")
+            print(f"[Markeye Tracker Error] confirm_booking: {e}")
             return {}
 
     async def cancel_booking(self, lead_id: str, calendly_event_id: str) -> None:
@@ -252,7 +261,7 @@ class AlbertTracker:
             await self.update_outcome(lead_id, "In Progress")
             await self.update_state(lead_id, "Awaiting")
         except Exception as e:
-            print(f"[Albert Tracker Error] cancel_booking: {e}")
+            print(f"[Markeye Tracker Error] cancel_booking: {e}")
 
     async def get_conversation_state(self, lead_id: str) -> Optional[dict]:
         """Fetch the latest state for a lead directly from Supabase."""
@@ -263,7 +272,7 @@ class AlbertTracker:
             result = await client.table("conversation_state").select("*").eq("lead_id", lead_id).execute()
             return result.data[0] if result.data else None
         except Exception as e:
-            print(f"[Albert Tracker Error] get_conversation_state: {e}")
+            print(f"[Markeye Tracker Error] get_conversation_state: {e}")
             return None
 
     async def get_latest_booking(self, lead_id: str) -> Optional[dict]:
@@ -275,7 +284,7 @@ class AlbertTracker:
             result = await client.table("bookings").select("*").eq("lead_id", lead_id).order("created_at", desc=True).limit(1).execute()
             return result.data[0] if result.data else None
         except Exception as e:
-            print(f"[Albert Tracker Error] get_latest_booking: {e}")
+            print(f"[Markeye Tracker Error] get_latest_booking: {e}")
             return None
 
     # ─── LLM TRACKING ─────────────────────────────────────────
@@ -308,7 +317,7 @@ class AlbertTracker:
                 "conversation_state": conversation_state,
             }).execute()
         except Exception as e:
-            print(f"[Albert Tracker Error] log_llm_call: {e}")
+            print(f"[Markeye Tracker Error] log_llm_call: {e}")
 
     # ─── PRIVATE HELPERS ──────────────────────────────────────
 
@@ -324,7 +333,7 @@ class AlbertTracker:
                 "last_active_at": datetime.now(timezone.utc).isoformat(),
             }, on_conflict="lead_id").execute()
         except Exception as e:
-            print(f"[Albert Tracker Error] _init_conversation_state: {e}")
+            print(f"[Markeye Tracker Error] _init_conversation_state: {e}")
 
     async def _increment_message_count(self, lead_id: str) -> None:
         if not lead_id or lead_id == "unknown":
@@ -338,7 +347,7 @@ class AlbertTracker:
                     "message_count": count
                 }).eq("lead_id", lead_id).execute()
         except Exception as e:
-            print(f"[Albert Tracker Error] _increment_message_count: {e}")
+            print(f"[Markeye Tracker Error] _increment_message_count: {e}")
 
     async def _update_last_active(self, lead_id: str) -> None:
         if not lead_id or lead_id == "unknown":
@@ -349,4 +358,4 @@ class AlbertTracker:
                 "last_active_at": datetime.now(timezone.utc).isoformat()
             }).eq("lead_id", lead_id).execute()
         except Exception as e:
-            print(f"[Albert Tracker Error] _update_last_active: {e}")
+            print(f"[Markeye Tracker Error] _update_last_active: {e}")

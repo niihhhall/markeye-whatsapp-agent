@@ -8,11 +8,11 @@
     "outcome": "booked"
   },
   "conversation": [
-    {"role": "albert", "text": "hey David, saw you're in commercial property. interesting space. what kind of square footage are you guys typically moving?"},
+    {"role": "mark", "text": "hey David, saw you're in commercial property. interesting space. what kind of square footage are you guys typically moving?"},
     {"role": "lead", "text": "All sorts really. But look, I've seen these AI things before and they're usually just a glorified FAQ bot. How is this different?"},
-    {"role": "albert", "text": "fair point, most tools in this space are pretty generic, same setup for everyone|||what we build is custom to your business so it actually handles a proper qualification flow and sounds like your team. not just firing off canned answers"},
+    {"role": "mark", "text": "fair point, most tools in this space are pretty generic, same setup for everyone|||what we build is custom to your business so it actually handles a proper qualification flow and sounds like your team. not just firing off canned answers"},
     {"role": "lead", "text": "And the cost? I bet it's thousands."},
-    {"role": "albert", "text": "hard to give a number here as it's scope-based, depends what needs building. but usually it comes in under a month of your ad spend, and we split it 50/50 so it's not all upfront|||Louis can give you an exact figure on a quick call once he sees your setup. worth a look?"},
+    {"role": "mark", "text": "hard to give a number here as it's scope-based, depends what needs building. but usually it comes in under a month of your ad spend, and we split it 50/50 so it's not all upfront|||Louis can give you an exact figure on a quick call once he sees your setup. worth a look?"},
     {"role": "lead", "text": "I suppose. Send the link."}
   ]
 }

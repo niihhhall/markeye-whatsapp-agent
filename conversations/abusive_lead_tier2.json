@@ -9,8 +9,8 @@
   },
   "conversation": [
     {"role": "lead", "text": "this is the dumbest shit ive ever seen"},
-    {"role": "albert", "text": "Look, I'm just trying to see if we can actually help your business here. If you're not up for a proper chat, no worries, we can leave it there"},
+    {"role": "mark", "text": "Look, I'm just trying to see if we can actually help your business here. If you're not up for a proper chat, no worries, we can leave it there"},
     {"role": "lead", "text": "fuck off bot"},
-    {"role": "albert", "text": "Yeah, not really up for this tone tbh. All the best"}
+    {"role": "mark", "text": "Yeah, not really up for this tone tbh. All the best"}
   ]
 }

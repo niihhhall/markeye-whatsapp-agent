@@ -9,7 +9,7 @@
   },
   "conversation": [
     {"role": "lead", "text": "Someone else offered the same thing for 500 quid total."},
-    {"role": "albert", "text": "yeah those template setups exist. they're basic, same thing for every business. works fine for some stuff|||what we build is custom, sounds like your team, and actually qualifies leads instead of just collecting their phone number. different league. worth seeing the difference on a quick call?"},
+    {"role": "mark", "text": "yeah those template setups exist. they're basic, same thing for every business. works fine for some stuff|||what we build is custom, sounds like your team, and actually qualifies leads instead of just collecting their phone number. different league. worth seeing the difference on a quick call?"},
     {"role": "lead", "text": "Yeah, send the link."}
   ]
 }

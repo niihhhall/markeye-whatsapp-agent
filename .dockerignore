@@ -1,0 +1,11 @@
+__pycache__
+*.pyc
+.env
+.git
+node_modules
+sessions/
+tmp/
+test_failures.txt
+test_results.txt
+*.bat
+.pytest_cache

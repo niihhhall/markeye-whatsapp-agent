@@ -9,7 +9,7 @@
   },
   "conversation": [
     {"role": "lead", "text": "Just tell me the price, stop avoiding it."},
-    {"role": "albert", "text": "look, typically it's less than a month of ad spend. beyond that I genuinely can't give a number without knowing your setup|||Louis'll give you a proper figure on the call, takes 20 minutes and you'll know exactly where it lands. want to grab a time?"},
+    {"role": "mark", "text": "look, typically it's less than a month of ad spend. beyond that I genuinely can't give a number without knowing your setup|||Louis'll give you a proper figure on the call, takes 20 minutes and you'll know exactly where it lands. want to grab a time?"},
     {"role": "lead", "text": "Fine, send the link."}
   ]
 }

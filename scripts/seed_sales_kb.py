@@ -47,7 +47,7 @@ SALES_INTEL = {
 """,
     "rag:sales:closing": """
 ═══ NATURAL CLOSING ═══
-- ASSUMPTIVE: "Louis can walk you through this. Want me to send the link?"
+- ASSUMPTIVE: "The team can walk you through this. Want me to send the link?"
 - SUMMARY CLOSE: Reflect their words back before suggesting the call.
 - THE CALL IS THE DEMO: Focus only on getting them to the call.
 - DON'T OVERSELL: Once they say yes, stop selling. Just send link.

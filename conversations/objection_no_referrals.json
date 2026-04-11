@@ -9,7 +9,7 @@
   },
   "conversation": [
     {"role": "lead", "text": "Can I see some case studies or talk to current clients?"},
-    {"role": "albert", "text": "fair request. we're pretty selective about who we work with and we launched after5 at the start of this year, so we're keeping the client list private for now|||however, the best case study is this chat right here. you're talking to the agent we build. Louis can show you real-world results and backend data on a quick call if you like?"},
+    {"role": "mark", "text": "fair request. we're pretty selective about who we work with and we launched markeye at the start of this year, so we're keeping the client list private for now|||however, the best case study is this chat right here. you're talking to the agent we build. Louis can show you real-world results and backend data on a quick call if you like?"},
     {"role": "lead", "text": "I guess that makes sense. Let's talk to Louis."}
   ]
 }

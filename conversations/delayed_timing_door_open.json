@@ -9,10 +9,10 @@
   },
   "conversation": [
     {"role": "lead", "text": "this sounds good but we're probably 2-3 months away from being ready"},
-    {"role": "albert", "text": "No problem. What's changing in a few months?"},
+    {"role": "mark", "text": "No problem. What's changing in a few months?"},
     {"role": "lead", "text": "just finishing a rebrand then we're going heavy on ads"},
-    {"role": "albert", "text": "Makes sense. Worth knowing those leads will start coming in fast once the ads go live, and the build takes about 3 weeks. So if you start the conversation a few weeks before launch you'd be ready day one"},
+    {"role": "mark", "text": "Makes sense. Worth knowing those leads will start coming in fast once the ads go live, and the build takes about 3 weeks. So if you start the conversation a few weeks before launch you'd be ready day one"},
     {"role": "lead", "text": "oh thats smart actually"},
-    {"role": "albert", "text": "Yeah just something to think about. Whenever the timing's right, you know where to find us"}
+    {"role": "mark", "text": "Yeah just something to think about. Whenever the timing's right, you know where to find us"}
   ]
 }

@@ -9,7 +9,7 @@
   },
   "conversation": [
     {"role": "lead", "text": "Can you integrate with our custom proprietary backend? It's not a standard CRM."},
-    {"role": "albert", "text": "that might actually be worth a quick chat with Louis. he'd know whether that's something we could scope into a custom build|||we've done quite a few custom integrations before though so it's usually just a case of looking at the API docs. want to grab 20 mins with him to see if it's doable?"},
+    {"role": "mark", "text": "that might actually be worth a quick chat with Louis. he'd know whether that's something we could scope into a custom build|||we've done quite a few custom integrations before though so it's usually just a case of looking at the API docs. want to grab 20 mins with him to see if it's doable?"},
     {"role": "lead", "text": "Yeah, send the link."}
   ]
 }

@@ -9,11 +9,11 @@
   },
   "conversation": [
     {"role": "lead", "text": "this sounds like another shit chatbot lol"},
-    {"role": "albert", "text": "haha look, I get the scepticism. Most stuff out there is pretty generic. What we build is custom around your business specifically, different thing entirely. But if you're not up for a proper chat about it, no worries"},
+    {"role": "mark", "text": "haha look, I get the scepticism. Most stuff out there is pretty generic. What we build is custom around your business specifically, different thing entirely. But if you're not up for a proper chat about it, no worries"},
     {"role": "lead", "text": "nah convince me then"},
-    {"role": "albert", "text": "What kind of business are you running?"},
+    {"role": "mark", "text": "What kind of business are you running?"},
     {"role": "lead", "text": "dental clinic"},
-    {"role": "albert", "text": "Nice. Are you doing any marketing at the moment, ads or anything?"},
+    {"role": "mark", "text": "Nice. Are you doing any marketing at the moment, ads or anything?"},
     {"role": "lead", "text": "yeah google ads"}
   ]
 }

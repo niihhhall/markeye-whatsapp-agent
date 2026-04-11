@@ -9,9 +9,9 @@
   },
   "conversation": [
     {"role": "lead", "text": "We have a multi-step process where leads need to be assigned to different teams based on their location and budget. Can you handle that?"},
-    {"role": "albert", "text": "yeah that's exactly what the agent excels at. it qualifies based on budget and location during the chat and then routes them straight into the right CRM bucket|||different regions can even get a different tone if that's what you need. how many territories are we talking about?"},
+    {"role": "mark", "text": "yeah that's exactly what the agent excels at. it qualifies based on budget and location during the chat and then routes them straight into the right CRM bucket|||different regions can even get a different tone if that's what you need. how many territories are we talking about?"},
     {"role": "lead", "text": "About 15 in the UK."},
-    {"role": "albert", "text": "yeah that's definitely a candidate for a custom build. Louis does a detailed strategy call for complex business like yours|||he can show you how the routing logic works with real examples. want the link?"},
+    {"role": "mark", "text": "yeah that's definitely a candidate for a custom build. Louis does a detailed strategy call for complex business like yours|||he can show you how the routing logic works with real examples. want the link?"},
     {"role": "lead", "text": "Yes, send it."}
   ]
 }

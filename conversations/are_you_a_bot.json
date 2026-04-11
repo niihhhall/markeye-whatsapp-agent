@@ -9,8 +9,8 @@
   },
   "conversation": [
     {"role": "lead", "text": "wait are you a real person"},
-    {"role": "albert", "text": "haha no, I'm AI actually. Albert, After5's sales agent. Same job as any rep though, just figuring out if we can actually help. What's your situation?"},
+    {"role": "mark", "text": "haha no, I'm AI actually. mark, markeye's sales agent. Same job as any rep though, just figuring out if we can actually help. What's your situation?"},
     {"role": "lead", "text": "oh ok thats actually kinda cool"},
-    {"role": "albert", "text": "Yeah it's basically what we build for other businesses. So you're getting a live demo right now. What kind of leads are you working with?"}
+    {"role": "mark", "text": "Yeah it's basically what we build for other businesses. So you're getting a live demo right now. What kind of leads are you working with?"}
   ]
 }

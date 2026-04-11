@@ -1,209 +1,255 @@
-import os
 import json
 import logging
-from typing import List, Dict, Any
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+import os
+from datetime import datetime, timezone
+from typing import List, Dict, Any, Optional
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
+from fastapi.responses import StreamingResponse
 from app.config import settings
-from app.redis_client import redis_client
-from app.conversation_library import load_conversation_library
 from app.supabase_client import supabase_client
+from app.training_utils import messages_to_training_format, get_training_stats, validate_jsonl_line
+from app.client_manager import client_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/training", tags=["training"])
 
-CONVERSATIONS_DIR = "conversations"
-
-@router.get("/library")
-async def get_library():
-    """List all conversation examples in the library."""
+@router.post("/compile")
+async def compile_training_data():
+    """
+    Finds finished leads (booked/lost or stale >24h) and compiles 
+    their message history into the conversations table for training.
+    """
     try:
-        files = [f for f in os.listdir(CONVERSATIONS_DIR) if f.endswith(".json")]
-        examples = []
-        for f in files:
-            with open(os.path.join(CONVERSATIONS_DIR, f), "r", encoding="utf-8") as jf:
-                data = json.load(jf)
-                examples.append({
-                    "filename": f,
-                    "id": data.get("id"),
-                    "tags": data.get("tags", {}),
-                    "title": f.replace(".json", "").replace("_", " ").title()
-                })
-        return {"status": "ok", "examples": examples}
-    except Exception as e:
-        logger.error(f"Error listing library: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/library/{filename}")
-async def get_example_detail(filename: str):
-    """Get the full content of a conversation example."""
-    path = os.path.join(CONVERSATIONS_DIR, filename)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="Example not found")
-    
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/library")
-async def save_example(data: Dict[str, Any]):
-    """Save or update a conversation example file."""
-    filename = data.get("filename")
-    if not filename:
-        filename = f"{data.get('id', 'new_example')}.json"
-    
-    if not filename.endswith(".json"):
-        filename += ".json"
+        client = await supabase_client.get_client()
         
-    path = os.path.join(CONVERSATIONS_DIR, filename)
-    try:
-        # Remove filename from data before saving to file
-        save_data = data.copy()
-        if "filename" in save_data:
-            del save_data["filename"]
+        # 1. Identify "finished" leads or stale ones
+        # For simplicity, we fetch leads with status 'booked', 'lost' or not updated for 24h
+        # and that don't have a record in 'conversations' table yet.
+        
+        # We'll use a subquery approach via Postgrest
+        # For now, let's fetch leads that might be eligible
+        query = client.table("leads").select("id, phone, client_id, outcome, updated_at")
+        res = await query.execute()
+        leads = res.data or []
+        
+        compiled_count = 0
+        now = datetime.now(timezone.utc)
+        
+        for lead in leads:
+            lead_id = lead["id"]
             
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(save_data, f, indent=2)
-        
-        # Reload library into Redis
-        await load_conversation_library(redis_client.redis)
-        return {"status": "ok", "filename": filename}
-    except Exception as e:
-        logger.error(f"Error saving example: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.delete("/library/{filename}")
-async def delete_example(filename: str):
-    """Delete a conversation example."""
-    path = os.path.join(CONVERSATIONS_DIR, filename)
-    if os.path.exists(path):
-        os.remove(path)
-        await load_conversation_library(redis_client.redis)
-        return {"status": "ok"}
-    raise HTTPException(status_code=404, detail="File not found")
-
-@router.get("/worthy")
-async def get_worthy_conversations(limit: int = 50):
-    """Get 'training-worthy' conversations from Supabase."""
-    try:
-        response = await supabase_client.table("training_data") \
-            .select("*, leads(first_name, last_name, phone)") \
-            .order("created_at", desc=True) \
-            .limit(limit) \
-            .execute()
-        return {"status": "ok", "data": response.data}
-    except Exception as e:
-        logger.error(f"Error fetching worthy conversations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/export")
-async def trigger_export(background_tasks: BackgroundTasks):
-    """Trigger the JSONL export process."""
-    try:
-        from app.training_export import export_training_data
-        background_tasks.add_task(export_training_data)
-        return {"status": "ok", "message": "Export started in background"}
-    except Exception as e:
-        logger.error(f"Error triggering export: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.patch("/worthy/{id}")
-async def update_worthy_review(id: str, data: Dict[str, Any]):
-    """Update a training record with manual review/feedback."""
-    try:
-        update_data = {}
-        if "manual_score" in data:
-            update_data["manual_score"] = data["manual_score"]
-        if "feedback" in data:
-            update_data["feedback"] = data["feedback"]
-        if "is_reviewed" in data:
-            update_data["is_reviewed"] = data["is_reviewed"]
-        
-        if not update_data:
-            return {"status": "ignored", "message": "No data to update"}
-
-        response = await supabase_client.table("training_data") \
-            .update(update_data) \
-            .eq("id", id) \
-            .execute()
+            # Check if already compiled
+            check_res = await client.table("conversations").select("id").eq("lead_id", lead_id).execute()
+            if check_res.data:
+                continue
+                
+            # Eligibility check
+            is_finished = lead["outcome"].lower() in ["booked", "lost", "closed"]
+            last_updated = datetime.fromisoformat(lead["updated_at"].replace("Z", "+00:00"))
+            is_stale = (now - last_updated).total_seconds() > 86400 # 24 hours
             
-        return {"status": "ok", "data": response.data}
+            if is_finished or is_stale:
+                # Compile messages
+                msg_res = await client.table("messages").select("*").eq("lead_id", lead_id).order("created_at").execute()
+                messages = msg_res.data or []
+                
+                if not messages:
+                    continue
+                    
+                # Get client system prompt
+                client_id = lead.get("client_id")
+                system_prompt = ""
+                if client_id:
+                    cfg = await client_manager.get_client_by_id(client_id)
+                    system_prompt = cfg.get("system_prompt", "") if cfg else ""
+                
+                if not system_prompt:
+                    prompt_path = os.path.join(os.getcwd(), "prompts", "system_prompt.txt")
+                    if os.path.exists(prompt_path):
+                        with open(prompt_path, "r", encoding="utf-8") as f:
+                            system_prompt = f.read()
+
+                # Format for training
+                training_data = messages_to_training_format(messages, system_prompt)
+                if not training_data:
+                    continue
+                
+                # Insert into conversations
+                await client.table("conversations").insert({
+                    "client_id": client_id,
+                    "lead_id": lead_id,
+                    "messages_jsonl": json.dumps(training_data),
+                    "quality_label": None
+                }).execute()
+                compiled_count += 1
+                
+        return {"status": "ok", "compiled": compiled_count}
     except Exception as e:
-        logger.error(f"Error updating review: {e}")
+        logger.error(f"[Training] Compilation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/label")
+async def label_conversation(payload: Dict[str, Any]):
+    """Label a specific conversation as good, bad, or neutral."""
+    cid = payload.get("conversation_id")
+    label = payload.get("quality_label")
+    
+    if label not in ["good", "bad", "neutral"]:
+        raise HTTPException(status_code=400, detail="Invalid quality_label")
+        
+    try:
+        client = await supabase_client.get_client()
+        res = await client.table("conversations").update({"quality_label": label}).eq("id", cid).execute()
+        return {"updated": True, "conversation_id": cid, "label": label}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/label/bulk")
+async def bulk_label_conversations(payload: Dict[str, Any]):
+    """Update multiple conversations at once."""
+    cids = payload.get("conversation_ids", [])
+    label = payload.get("quality_label")
+    
+    if label not in ["good", "bad", "neutral"]:
+        raise HTTPException(status_code=400, detail="Invalid quality_label")
+        
+    try:
+        client = await supabase_client.get_client()
+        # Postgrest 'in' query
+        res = await client.table("conversations").update({"quality_label": label}).in_("id", cids).execute()
+        return {"updated": len(res.data) if res.data else 0}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/stats")
-async def get_training_stats():
-    """Get training stats for dashboard overview."""
+async def get_stats():
+    """Return counts and health metrics for the training dataset."""
     try:
-        files = [f for f in os.listdir(CONVERSATIONS_DIR) if f.endswith(".json")]
+        client = await supabase_client.get_client()
+        res = await client.table("conversations").select("quality_label, exported").execute()
+        data = res.data or []
         
-        # Count worthy in Supabase
-        worthy_res = await supabase_client.table("training_data").select("count").execute()
-        worthy_count = worthy_res.data[0]["count"] if worthy_res.data else 0
-        
-        return {
-            "example_count": len(files),
-            "worthy_count": worthy_count,
-            "redis_worthy_count": await redis_client.redis.scard("training:index")
+        stats = {
+            "total_conversations": len(data),
+            "unlabeled": len([d for d in data if d["quality_label"] is None]),
+            "good": len([d for d in data if d["quality_label"] == "good"]),
+            "bad": len([d for d in data if d["quality_label"] == "bad"]),
+            "neutral": len([d for d in data if d["quality_label"] == "neutral"]),
+            "exported": len([d for d in data if d["exported"]]),
+            "not_exported": len([d for d in data if not d["exported"]])
         }
+        return stats
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
-@router.get("/brain")
-async def get_brain_rules():
-    """Get active few-shot rules from Dynamic Training table."""
-    try:
-        response = await supabase_client.get_client()
-        res = await response.table("dynamic_training") \
-            .select("*") \
-            .order("priority", desc=True) \
-            .execute()
-        return {"status": "ok", "data": res.data}
-    except Exception as e:
-        logger.error(f"Error fetching brain rules: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/brain")
-async def add_brain_rule(data: Dict[str, Any]):
-    """Add a new rule to the Dynamic Training brain."""
+@router.get("/conversations")
+async def list_conversations(
+    label: Optional[str] = None, 
+    exported: Optional[bool] = None, 
+    client_id: Optional[str] = None, 
+    limit: int = 50
+):
+    """List conversations for review (no full JSONL body)."""
     try:
         client = await supabase_client.get_client()
-        res = await client.table("dynamic_training") \
-            .insert(data) \
-            .execute()
-        return {"status": "ok", "data": res.data}
+        query = client.table("conversations").select("id, client_id, lead_id, quality_label, exported, created_at, messages_jsonl")
+        
+        if label: query = query.eq("quality_label", label)
+        if exported is not None: query = query.eq("exported", exported)
+        if client_id: query = query.eq("client_id", client_id)
+        
+        res = await query.order("created_at", desc=True).limit(limit).execute()
+        
+        results = []
+        for row in (res.data or []):
+            try:
+                # Calculate turn count from JSONL without returning the whole blob
+                msg_data = json.loads(row["messages_jsonl"])
+                turn_count = len(msg_data.get("messages", []))
+            except:
+                turn_count = 0
+                
+            results.append({
+                "id": row["id"],
+                "client_id": row["client_id"],
+                "lead_id": row["lead_id"],
+                "quality_label": row["quality_label"],
+                "exported": row["exported"],
+                "created_at": row["created_at"],
+                "message_count": turn_count
+            })
+            
+        return results
     except Exception as e:
-        logger.error(f"Error adding brain rule: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/brain/{id}")
-async def delete_brain_rule(id: int):
-    """Remove a rule from the Dynamic Training brain."""
+@router.get("/conversations/{conversation_id}")
+async def get_conversation_detail(conversation_id: str):
+    """Get full conversation for labeling review."""
     try:
         client = await supabase_client.get_client()
-        await client.table("dynamic_training") \
-            .delete() \
-            .eq("id", id) \
-            .execute()
-        return {"status": "ok"}
+        res = await client.table("conversations").select("*").eq("id", conversation_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+            
+        row = res.data[0]
+        row["messages"] = json.loads(row["messages_jsonl"])
+        return row
     except Exception as e:
-        logger.error(f"Error deleting brain rule: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/worthy/manual")
-async def add_worthy_manually(data: Dict[str, Any]):
-    """Manually add a conversation to the training pool."""
+@router.post("/export")
+async def export_data(client_id: Optional[str] = None):
+    """Generates JSONL export for all 'good' non-exported conversations."""
     try:
-        client = await supabase_client.get_client()
-        res = await client.table("training_data").insert({
-            "lead_id": data.get("lead_id"),
-            "score": data.get("score", 100),
-            "outcome": data.get("outcome", "manual_pick"),
-            "history": data.get("history"),
-            "feedback": data.get("feedback", "Manual Pick from Dashboard")
-        }).execute()
-        return {"status": "ok", "data": res.data}
+        db = await supabase_client.get_client()
+        query = db.table("conversations").select("*").eq("quality_label", "good").eq("exported", False)
+        if client_id:
+            query = query.eq("client_id", client_id)
+            
+        res = await query.execute()
+        records = res.data or []
+        
+        if not records:
+            raise HTTPException(status_code=404, detail="No 'good' unlabeled data to export")
+            
+        lines = []
+        cids = []
+        for rec in records:
+            lines.append(rec["messages_jsonl"])
+            cids.append(rec["id"])
+            
+        # Mark as exported
+        await db.table("conversations").update({"exported": True}).in_("id", cids).execute()
+        
+        content = "\n".join(lines) + "\n"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        
+        return StreamingResponse(
+            iter([content]),
+            media_type="application/jsonl",
+            headers={
+                "Content-Disposition": f"attachment; filename=markeye_export_{timestamp}.jsonl",
+                "X-Export-Count": str(len(records))
+            }
+        )
     except Exception as e:
-        logger.error(f"Error manually adding to pool: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/export/preview")
+async def export_preview(client_id: Optional[str] = None):
+    """Preview first 5 conversations for export."""
+    try:
+        db = await supabase_client.get_client()
+        query = db.table("conversations").select("*").eq("quality_label", "good").eq("exported", False)
+        if client_id:
+            query = query.eq("client_id", client_id)
+            
+        res = await query.order("created_at").limit(5).execute()
+        data = []
+        for row in (res.data or []):
+            data.append(json.loads(row["messages_jsonl"]))
+            
+        return {"count": len(res.data), "preview": data}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

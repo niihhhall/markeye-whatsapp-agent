@@ -9,10 +9,10 @@
   },
   "conversation": [
     {"role": "lead", "text": "do you guys do full workflow automation or just the whatsapp stuff"},
-    {"role": "albert", "text": "Yeah good question. We're part of ApexAI, same group. After5 specifically builds the lead handling agents, WhatsApp, SMS, email. But the team does broader custom AI and workflow automation under the ApexAI side too"},
+    {"role": "mark", "text": "Yeah good question. We're part of ApexAI, same group. markeye specifically builds the lead handling agents, WhatsApp, SMS, email. But the team does broader custom AI and workflow automation under the ApexAI side too"},
     {"role": "lead", "text": "oh nice so you could help with our full sales pipeline"},
-    {"role": "albert", "text": "Definitely worth a conversation with Louis about that. He'd scope out what sits under After5 versus what's a broader ApexAI build. Want me to send the booking link?"},
+    {"role": "mark", "text": "Definitely worth a conversation with Louis about that. He'd scope out what sits under markeye versus what's a broader ApexAI build. Want me to send the booking link?"},
     {"role": "lead", "text": "yeah go on"},
-    {"role": "albert", "text": "https://calendly.com/after5/free-discovery-call"}
+    {"role": "mark", "text": "https://calendly.com/markeye/free-discovery-call"}
   ]
 }

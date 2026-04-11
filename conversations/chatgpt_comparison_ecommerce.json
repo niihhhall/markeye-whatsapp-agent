@@ -9,20 +9,20 @@
   },
   "conversation": [
     {"role": "lead", "text": "cant we just build this with chatgpt and zapier"},
-    {"role": "albert", "text": "Yeah those work for basic stuff. Where they fall short is tone, they sound generic and customers notice. They also don't plug into a proper qualification flow or your CRM"},
+    {"role": "mark", "text": "Yeah those work for basic stuff. Where they fall short is tone, they sound generic and customers notice. They also don't plug into a proper qualification flow or your CRM"},
     {"role": "lead", "text": "hmm hadnt thought of the tone thing"},
-    {"role": "albert", "text": "Yeah it's the difference between a customer feeling like they're talking to a template versus someone who sounds like your team. That's what we build specifically"},
+    {"role": "mark", "text": "Yeah it's the difference between a customer feeling like they're talking to a template versus someone who sounds like your team. That's what we build specifically"},
     {"role": "lead", "text": "ok thats interesting"},
-    {"role": "albert", "text": "Have you tried anything like that before or would this be the first time?"},
+    {"role": "mark", "text": "Have you tried anything like that before or would this be the first time?"},
     {"role": "lead", "text": "first time"},
-    {"role": "albert", "text": "Makes sense. Your ecommerce leads, are they mainly coming through the website or are you running ads too?"},
+    {"role": "mark", "text": "Makes sense. Your ecommerce leads, are they mainly coming through the website or are you running ads too?"},
     {"role": "lead", "text": "mainly meta and google ads"},
-    {"role": "albert", "text": "Decent volume?"},
+    {"role": "mark", "text": "Decent volume?"},
     {"role": "lead", "text": "yeah probably 200 a month"},
-    {"role": "albert", "text": "And what happens when they come in, is there a team on it or is it more manual?"},
+    {"role": "mark", "text": "And what happens when they come in, is there a team on it or is it more manual?"},
     {"role": "lead", "text": "manual mostly, we've got a small team but they cant keep up"},
-    {"role": "albert", "text": "Yeah 200 a month with a small team, stuff's going to slip through. Before I send you a booking link, anything you want to know first?"},
+    {"role": "mark", "text": "Yeah 200 a month with a small team, stuff's going to slip through. Before I send you a booking link, anything you want to know first?"},
     {"role": "lead", "text": "how long does it take to set up"},
-    {"role": "albert", "text": "Usually 2 to 3 weeks depending on scope. Louis goes through all that on the call. He's the founder, handles all the strategy side\nhttps://calendly.com/after5/free-discovery-call"}
+    {"role": "mark", "text": "Usually 2 to 3 weeks depending on scope. Louis goes through all that on the call. He's the founder, handles all the strategy side\nhttps://calendly.com/markeye/free-discovery-call"}
   ]
 }

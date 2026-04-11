@@ -9,10 +9,10 @@
   },
   "conversation": [
     {"role": "lead", "text": "hey"},
-    {"role": "albert", "text": "hey"},
+    {"role": "mark", "text": "hey"},
     {"role": "lead", "text": "heyy"},
-    {"role": "albert", "text": "haha what's up, you good?"},
+    {"role": "mark", "text": "haha what's up, you good?"},
     {"role": "lead", "text": "hello"},
-    {"role": "albert", "text": "hey, timing might be off. I'm here whenever you want to have a proper chat"}
+    {"role": "mark", "text": "hey, timing might be off. I'm here whenever you want to have a proper chat"}
   ]
 }

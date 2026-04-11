@@ -8,9 +8,9 @@
     "outcome": "booked"
   },
   "conversation": [
-    {"role": "albert", "text": "hey Mark, saw you're in the legal space. solicitors we talk to usually struggle with the after-hours intake, leads basically fill in five forms and wait for the first reply|||what's your current intake process like?"},
+    {"role": "mark", "text": "hey Mark, saw you're in the legal space. solicitors we talk to usually struggle with the after-hours intake, leads basically fill in five forms and wait for the first reply|||what's your current intake process like?"},
     {"role": "lead", "text": "We have a form and then a secretary calls them the next day. It's slow."},
-    {"role": "albert", "text": "yeah that's the killer. if they're looking for a solicitor at 9pm, they want an answer now|||the agent handles the full qualification by matter type and books the consult straight away. team only sees the ones actually ready to go. want to see how that works on a quick call?"},
+    {"role": "mark", "text": "yeah that's the killer. if they're looking for a solicitor at 9pm, they want an answer now|||the agent handles the full qualification by matter type and books the consult straight away. team only sees the ones actually ready to go. want to see how that works on a quick call?"},
     {"role": "lead", "text": "Yes, send the link."}
   ]
 }

@@ -9,3 +9,7 @@ build/
 .idea/
 .vscode/
 *.log
+baileys-service/sessions/
+node_modules/
+media/
+tmp/

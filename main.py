@@ -6,7 +6,18 @@ from app.webhook import router as webhook_router
 from app.outbound import router as outbound_router
 from app.calendly import router as calendly_router
 from app.training_api import router as training_router
+from app.dashboard import router as dashboard_router
 from app.config import settings
+import sentry_sdk
+import os
+
+# 1. Initialize Sentry (Operational Excellence)
+if os.getenv("SENTRY_DSN"):
+    sentry_sdk.init(
+        dsn=os.getenv("SENTRY_DSN"),
+        traces_sample_rate=0.1,
+        environment=os.getenv("ENVIRONMENT", "production")
+    )
 
 # Configure logging to stdout
 logging.basicConfig(
@@ -20,12 +31,18 @@ from app.redis_client import redis_client
 logger = logging.getLogger(__name__)
 logger.info("Application starting...")
 
-app = FastAPI(title="After5 WhatsApp AI Agent", version="1.0.0")
+app = FastAPI(title="Markeye WhatsApp AI Agent — Mark", version="1.0.0")
 
 @app.on_event("startup")
 async def startup():
     logger.info("Running startup tasks...")
     await load_conversation_library(redis_client.redis)
+    
+    # Start Baileys Bridge for direct WhatsApp integration
+    from app.baileys_bridge import baileys_bridge
+    import asyncio
+    asyncio.create_task(baileys_bridge.start())
+    logger.info("✅ Baileys Bridge listener launched")
 
 # Allow CORS for the frontend dashboard
 app.add_middleware(
@@ -36,15 +53,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from app.middleware import TelemetryMiddleware
+app.add_middleware(TelemetryMiddleware)
+
 app.include_router(webhook_router)
 app.include_router(outbound_router)
 app.include_router(calendly_router)
 app.include_router(training_router)
+app.include_router(dashboard_router)
 
 @app.get("/")
 async def health():
-    return {"status": "After5 Agent is running", "version": "1.0.1"}
+    return {"status": "Mark AI SDR is running", "version": "2.0.0"}
 
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+# Global application startTime
+import time
+start_time_global = time.time()
+
+@app.get("/metrics")
+async def get_metrics():
+    """Returns real-time operational stats."""
+    metrics = await redis_client.get_metrics()
+    uptime_seconds = int(time.time() - start_time_global)
+    
+    return {
+        "uptime_seconds": uptime_seconds,
+        "total_messages_processed": metrics.get("requests_total", 0),
+        "total_llm_calls": metrics.get("total_llm_calls", 0),
+        "llm_provider_usage": {
+            "groq": metrics.get("llm_provider:groq", 0),
+            "gemini": metrics.get("llm_provider:gemini", 0),
+            "cerebras": metrics.get("llm_provider:cerebras", 0),
+        },
+        "errors_total": metrics.get("errors_http", 0),
+        "estimated_token_burn": metrics.get("total_tokens", 0)
+    }

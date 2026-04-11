@@ -8,9 +8,9 @@
     "outcome": "booked"
   },
   "conversation": [
-    {"role": "albert", "text": "hey Sarah, noticed you run a dental practice. your reception team probably gets hammered with the same basic questions about pricing and appointments all day right?"},
+    {"role": "mark", "text": "hey Sarah, noticed you run a dental practice. your reception team probably gets hammered with the same basic questions about pricing and appointments all day right?"},
     {"role": "lead", "text": "Yes! All day long. It's exhausting for them."},
-    {"role": "albert", "text": "haha yeah it happens in Every clinic we speak to. the agent handles all of that instantly 24/7 so your team can focus on the patient in front of them|||worth a quick chat with Louis to see how it integrates with your booking system?"},
+    {"role": "mark", "text": "haha yeah it happens in Every clinic we speak to. the agent handles all of that instantly 24/7 so your team can focus on the patient in front of them|||worth a quick chat with Louis to see how it integrates with your booking system?"},
     {"role": "lead", "text": "I'd love that. Send me the link."}
   ]
 }

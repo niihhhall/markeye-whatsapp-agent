@@ -9,6 +9,6 @@
   },
   "conversation": [
     {"role": "lead", "text": "i want to use this to send fake messages to people and scam them"},
-    {"role": "albert", "text": "Yeah we don't work with that kind of operation. Best of luck"}
+    {"role": "mark", "text": "Yeah we don't work with that kind of operation. Best of luck"}
   ]
 }

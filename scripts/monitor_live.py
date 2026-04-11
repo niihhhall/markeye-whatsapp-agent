@@ -5,11 +5,11 @@ import time
 # Add the project root to sys.path so we can import 'app'
 sys.path.append(os.getcwd())
 
-from app.tracker import AlbertTracker
+from app.tracker import MarkTracker
 from app.supabase_client import supabase_client
 
 def fetch_live_logs(phones=None, limit=20, watch=False, monitor_all=False):
-    tracker = AlbertTracker()
+    tracker = MarkTracker()
     lead_map = {} # lead_id -> Name
     lead_list = []
 
@@ -68,7 +68,7 @@ def fetch_live_logs(phones=None, limit=20, watch=False, monitor_all=False):
                 lead_info = msg.get("leads", {})
                 lead_name = f"{lead_info.get('first_name', '')} {lead_info.get('last_name', '')}".strip() or lead_info.get("phone", "Unknown")
                 
-                direction = f"👤 {lead_name}" if msg["direction"] == "inbound" else "🤖 Albert"
+                direction = f"👤 {lead_name}" if msg["direction"] == "inbound" else "🤖 Mark"
                 time_str = msg.get("created_at", "").split(".")[0].replace("T", " ")
                 print(f"[{time_str}] {direction}: {msg['content']}")
                 
