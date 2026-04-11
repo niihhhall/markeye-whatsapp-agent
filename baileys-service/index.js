@@ -51,13 +51,13 @@ async function startSock() {
             keys: makeCacheableSignalKeyStore(state.keys, logger),
         },
         logger: pino({ level: 'silent' }),
-        browser: ["Markeye Agent", "Chrome", "1.0.0"],
+        browser: ["Ubuntu", "Chrome", "110.0.5563.147"],
         syncFullHistory: false,
         printQRInTerminal: false,
-        connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: 60000,
+        connectTimeoutMs: 90000,
+        defaultQueryTimeoutMs: 90000,
         keepAliveIntervalMs: 30000,
-        retryRequestDelayMs: 5000 + Math.random() * 2000,
+        retryRequestDelayMs: 10000,
         markOnlineOnConnect: true,
     });
 
@@ -80,7 +80,7 @@ async function startSock() {
 
     if (!sock.authState.creds.registered) {
         if (PHONE_NUMBER) {
-            console.log(`[Pairing] Requesting code for ${PHONE_NUMBER}...`);
+            console.log(`[Pairing] Requesting code for ${PHONE_NUMBER}... (Wait 15s)`);
             setTimeout(async () => {
                 try {
                     const code = await sock.requestPairingCode(PHONE_NUMBER);
@@ -88,9 +88,9 @@ async function startSock() {
                     console.log('PAIRING CODE:', code);
                     console.log('----------------------------\n');
                 } catch (err) {
-                    console.error('[Pairing] Error:', err.message);
+                    console.error('[Pairing] ERROR REASON:', err.message);
                 }
-            }, 5000);
+            }, 15000);
         }
     }
 
