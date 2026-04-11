@@ -15,7 +15,7 @@ import makeWASocket, {
     jidNormalizedUser,
     fetchLatestWaWebVersion,
     Browsers
-} from 'baileys';
+} from '@whiskeysockets/baileys';
 import pino from 'pino';
 import Redis from 'ioredis';
 import qrcode from 'qrcode-terminal';
@@ -67,10 +67,12 @@ async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
 
     sock = makeWASocket({
-        version,
+        version: [2, 3000, 1015901307], // Stable Version
         auth: state,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.macOS('Desktop')
+        browser: Browsers.macOS('Desktop'),
+        keepAliveIntervalMs: 30000,
+        printQRInTerminal: false
     });
 
     sock.ev.on('creds.update', saveCreds);
