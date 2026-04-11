@@ -50,7 +50,7 @@ async function startSock() {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, logger),
         },
-        logger: pino({ level: 'silent' }),
+        logger,
         browser: ["Ubuntu", "Chrome", "110.0.5563.147"],
         syncFullHistory: false,
         printQRInTerminal: false,
