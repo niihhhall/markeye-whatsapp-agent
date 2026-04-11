@@ -1,18 +1,17 @@
-const { 
+import { 
     default: makeWASocket, 
     useMultiFileAuthState, 
     DisconnectReason, 
     fetchLatestWaWebVersion,
-    makeCacheableSignalKeyStore,
-    PHONENUMBER_MCC
-} = require('@whiskeysockets/baileys');
-const pino = require('pino');
-const redis = require('redis');
-const fs = require('fs');
-const path = require('path');
+    makeCacheableSignalKeyStore
+} from '@whiskeysockets/baileys';
+import pino from 'pino';
+import { createClient } from 'redis';
+import fs from 'fs';
+import path from 'path';
 
-// Logger - Silent for production but readable for errors
-const logger = pino({ level: 'info' }); // Switch to info for debug during stabilization
+// Logger
+const logger = pino({ level: 'info' });
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const SESSION_DIR = '/app/sessions';
@@ -29,10 +28,10 @@ let sock;
 let redisClient;
 
 async function initRedis() {
-    redisClient = redis.createClient({ url: REDIS_URL });
+    redisClient = createClient({ url: REDIS_URL });
     redisClient.on('error', (err) => console.log('[Redis] Client Error', err));
     await redisClient.connect();
-    console.log('[Config] Redis:', REDIS_URL.split('@').pop());
+    console.log('[Config] Redis connected.');
 }
 
 async function startSock() {
@@ -53,7 +52,6 @@ async function startSock() {
         version,
         auth: {
             creds: state.creds,
-            /** caching makes the store faster to send/receive messages */
             keys: makeCacheableSignalKeyStore(state.keys, logger),
         },
         logger: pino({ level: 'silent' }),
@@ -62,12 +60,11 @@ async function startSock() {
         printQRInTerminal: false,
         
         // Stabilizing Timeouts for $6 droplet
-        connectTimeoutMs: 60000,       // 60s timeout for handshake
-        defaultQueryTimeoutMs: 60000,  // 60s for server queries
+        connectTimeoutMs: 60000,
+        defaultQueryTimeoutMs: 60000,
         keepAliveIntervalMs: 30000,
-        retryRequestDelayMs: 5000 + Math.random() * 2000, // Jittered retries
+        retryRequestDelayMs: 5000 + Math.random() * 2000,
         
-        // Mobile pairing
         markOnlineOnConnect: true,
     });
 
@@ -78,13 +75,11 @@ async function startSock() {
         try {
             const data = JSON.parse(message);
             console.log(`[Outbound] Sending to ${data.to}: ${data.message.substring(0, 50)}...`);
-            
             await sock.sendMessage(data.to, { text: data.message });
         } catch (err) {
             console.error('[Outbound] Error:', err.message);
         }
     });
-    console.log(`Subscribed to "${OUTBOUND_CHANNEL}"`);
 
     // 2. Pair with code if not authenticated
     if (!sock.authState.creds.registered) {
@@ -99,9 +94,7 @@ async function startSock() {
                 } catch (err) {
                     console.error('[Pairing] Error:', err.message);
                 }
-            }, 5000); // Wait 5s for socket to be ready
-        } else {
-            console.log('[Pairing] No PAIRING_PHONE_NUMBER found in .env');
+            }, 5000);
         }
     }
 
@@ -109,22 +102,14 @@ async function startSock() {
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         
-        if (qr && !PHONE_NUMBER) {
-            console.log('[Connection] QR Code generated (Scan or set PAIRING_PHONE_NUMBER)');
-        }
-
         if (connection === 'close') {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-            
             console.log(`[Connection] Closed. Reason: ${statusCode} (Status: ${shouldReconnect ? 'Reconnecting' : 'Logged out'})`);
             
             if (shouldReconnect) {
                 const delay = statusCode === 503 ? 15000 : 10000;
-                console.log(`[Connection] Reconnecting in ${delay/1000}s...`);
                 setTimeout(startSock, delay);
-            } else {
-                console.log('[Connection] Logged out. Manual intervention required.');
             }
         } else if (connection === 'open') {
             console.log('[Connection] 🚀 SUCCESSFULLY CONNECTED');
@@ -136,10 +121,7 @@ async function startSock() {
         if (m.type === 'notify') {
             for (const msg of m.messages) {
                 if (!msg.key.fromMe && msg.message) {
-                    const content = msg.message.conversation || 
-                                  msg.message.extendedTextMessage?.text || 
-                                  (msg.message.audioMessage ? "[Audio]" : "");
-                    
+                    const content = msg.message.conversation || msg.message.extendedTextMessage?.text;
                     if (!content) continue;
 
                     const payload = {
@@ -159,4 +141,4 @@ async function startSock() {
     sock.ev.on('creds.update', saveCreds);
 }
 
-initRedis().then(startSock);
+initRedis().then(startSock).catch(console.error);
