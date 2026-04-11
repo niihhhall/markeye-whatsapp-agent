@@ -9,7 +9,7 @@ import Redis from 'ioredis';
 import fs from 'fs';
 
 // Logger
-const logger = pino({ level: 'info' });
+const logger = pino({ level: 'debug' });
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const SESSION_DIR = '/app/sessions';
