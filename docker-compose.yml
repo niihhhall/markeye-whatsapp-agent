@@ -12,6 +12,10 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      resources:
+        reservations:
+          memory: 256M
 
   baileys:
     build: ./baileys-service
@@ -20,6 +24,11 @@ services:
     volumes:
       - baileys_sessions:/app/sessions
     restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          cpus: '0.4'
+          memory: 384M
 
 volumes:
   baileys_sessions:

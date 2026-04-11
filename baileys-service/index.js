@@ -1,173 +1,162 @@
-/*
- * REDIS CHANNELS:
- * 
- * INBOUND (Baileys → Python):
- *   "inbound"              - Text messages from leads
- *   "inbound:poll_response" - Poll answer from leads
- *   "inbound:media"        - Media messages from leads (with Supabase URL)
- */
-
-import makeWASocket, { 
+const { 
+    default: makeWASocket, 
     useMultiFileAuthState, 
     DisconnectReason, 
-    delay,
-    downloadMediaMessage,
-    jidNormalizedUser,
     fetchLatestWaWebVersion,
-    Browsers
-} from '@whiskeysockets/baileys';
-import pino from 'pino';
-import Redis from 'ioredis';
-import qrcode from 'qrcode-terminal';
-import { Boom } from '@hapi/boom';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
-import { createClient } from '@supabase/supabase-js';
-import mime from 'mime-types';
+    makeCacheableSignalKeyStore,
+    PHONENUMBER_MCC
+} = require('@whiskeysockets/baileys');
+const pino = require('pino');
+const redis = require('redis');
+const fs = require('fs');
+const path = require('path');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Logger - Silent for production but readable for errors
+const logger = pino({ level: 'info' }); // Switch to info for debug during stabilization
 
-// Load environment variables from the project root
-dotenv.config({ path: path.join(__dirname, '../.env') });
-
-// Configuration
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
-const SESSION_DIR = path.join(__dirname, 'sessions', 'default');
-const MEDIA_TEMP_DIR = path.join(__dirname, 'temp_media');
-const AUTH_MODE = process.env.AUTH_MODE || 'qr';
-const PAIRING_PHONE_NUMBER = process.env.PAIRING_PHONE_NUMBER;
+const SESSION_DIR = '/app/sessions';
+const INBOUND_CHANNEL = process.env.WHATSAPP_INBOUND_CHANNEL || 'inbound';
+const OUTBOUND_CHANNEL = process.env.WHATSAPP_OUTBOUND_CHANNEL || 'outbound';
+const PHONE_NUMBER = process.env.PAIRING_PHONE_NUMBER;
 
-// Ensure directories exist
-if (!fs.existsSync(SESSION_DIR)) fs.mkdirSync(SESSION_DIR, { recursive: true });
-if (!fs.existsSync(MEDIA_TEMP_DIR)) fs.mkdirSync(MEDIA_TEMP_DIR, { recursive: true });
+// Ensure session directory exists
+if (!fs.existsSync(SESSION_DIR)) {
+    fs.mkdirSync(SESSION_DIR, { recursive: true });
+}
 
-// Initialize Supabase
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_KEY
-);
+let sock;
+let redisClient;
 
-const logger = pino({ level: 'info' });
-console.log(`[Config] Redis: ${REDIS_URL.split('@').pop()}`);
+async function initRedis() {
+    redisClient = redis.createClient({ url: REDIS_URL });
+    redisClient.on('error', (err) => console.log('[Redis] Client Error', err));
+    await redisClient.connect();
+    console.log('[Config] Redis:', REDIS_URL.split('@').pop());
+}
 
-const redisPub = new Redis(REDIS_URL, { maxRetriesPerRequest: null });
-const redisSub = new Redis(REDIS_URL, { maxRetriesPerRequest: null });
-const redisSubControl = new Redis(REDIS_URL, { maxRetriesPerRequest: null });
-
-let sock = null;
-
-async function connectToWhatsApp() {
-    console.log('[Connection] Fetching latest WhatsApp version...');
-    const { version, isLatest } = await fetchLatestWaWebVersion({});
-    console.log(`[Connection] WA version: ${version.join('.')} (Latest: ${isLatest})`);
-
+async function startSock() {
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
+    
+    // Fetch latest version or fallback
+    let version;
+    try {
+        const result = await fetchLatestWaWebVersion();
+        version = result.version;
+        console.log(`[Connection] WA version: ${version.join('.')} (Latest: ${result.isLatest})`);
+    } catch (err) {
+        console.log('[Connection] Version fetch failed, using fallback.');
+        version = [2, 3000, 1015901307];
+    }
 
     sock = makeWASocket({
         version,
-        auth: state,
+        auth: {
+            creds: state.creds,
+            /** caching makes the store faster to send/receive messages */
+            keys: makeCacheableSignalKeyStore(state.keys, logger),
+        },
         logger: pino({ level: 'silent' }),
         browser: ["Markeye Agent", "Chrome", "1.0.0"],
+        syncFullHistory: false,
+        printQRInTerminal: false,
+        
+        // Stabilizing Timeouts for $6 droplet
+        connectTimeoutMs: 60000,       // 60s timeout for handshake
+        defaultQueryTimeoutMs: 60000,  // 60s for server queries
         keepAliveIntervalMs: 30000,
-        printQRInTerminal: false
+        retryRequestDelayMs: 5000 + Math.random() * 2000, // Jittered retries
+        
+        // Mobile pairing
+        markOnlineOnConnect: true,
     });
 
-    sock.ev.on('creds.update', saveCreds);
+    // 1. Handle Outbound Messages
+    const subscriber = redisClient.duplicate();
+    await subscriber.connect();
+    await subscriber.subscribe(OUTBOUND_CHANNEL, async (message) => {
+        try {
+            const data = JSON.parse(message);
+            console.log(`[Outbound] Sending to ${data.to}: ${data.message.substring(0, 50)}...`);
+            
+            await sock.sendMessage(data.to, { text: data.message });
+        } catch (err) {
+            console.error('[Outbound] Error:', err.message);
+        }
+    });
+    console.log(`Subscribed to "${OUTBOUND_CHANNEL}"`);
 
+    // 2. Pair with code if not authenticated
+    if (!sock.authState.creds.registered) {
+        if (PHONE_NUMBER) {
+            console.log(`[Pairing] Requesting code for ${PHONE_NUMBER}...`);
+            setTimeout(async () => {
+                try {
+                    const code = await sock.requestPairingCode(PHONE_NUMBER);
+                    console.log('\n----------------------------');
+                    console.log('PAIRING CODE:', code);
+                    console.log('----------------------------\n');
+                } catch (err) {
+                    console.error('[Pairing] Error:', err.message);
+                }
+            }, 5000); // Wait 5s for socket to be ready
+        } else {
+            console.log('[Pairing] No PAIRING_PHONE_NUMBER found in .env');
+        }
+    }
+
+    // 3. Connection Events
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         
-        // ALWAYS print QR Code if it's emitted, regardless of AUTH_MODE
-        if (qr) {
-            console.log('\n--- NEW QR CODE RECEIVED ---');
-            qrcode.generate(qr, { small: true });
-            console.log('You can scan the QR code above OR use the Pairing Code below.\n');
+        if (qr && !PHONE_NUMBER) {
+            console.log('[Connection] QR Code generated (Scan or set PAIRING_PHONE_NUMBER)');
         }
 
         if (connection === 'close') {
-            const statusCode = (lastDisconnect?.error instanceof Boom) 
-                ? lastDisconnect.error.output.statusCode 
-                : lastDisconnect?.error?.statusCode;
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
             
-            const message = lastDisconnect?.error?.message || 'Unknown error';
-            console.log(`[Connection] Closed. Reason: ${statusCode} (${message})`);
-
-            // DO NOT delete sessions automatically unless it's a manual logout
-            if (statusCode === DisconnectReason.loggedOut) {
-                console.log('[Connection] Logged out manually. Clearing session...');
-                try {
-                    fs.rmSync(SESSION_DIR, { recursive: true, force: true });
-                } catch (e) {}
-                setTimeout(connectToWhatsApp, 15000);
+            console.log(`[Connection] Closed. Reason: ${statusCode} (Status: ${shouldReconnect ? 'Reconnecting' : 'Logged out'})`);
+            
+            if (shouldReconnect) {
+                const delay = statusCode === 503 ? 15000 : 10000;
+                console.log(`[Connection] Reconnecting in ${delay/1000}s...`);
+                setTimeout(startSock, delay);
             } else {
-                // For 401, 503, 515 etc., just wait and retry. 
-                // Don't nuke the session folder so pairing state is preserved.
-                console.log(`[Connection] Reconnecting in 10s... (Status: ${statusCode})`);
-                setTimeout(connectToWhatsApp, 10000);
+                console.log('[Connection] Logged out. Manual intervention required.');
             }
         } else if (connection === 'open') {
-            console.log('[Connection] SUCCESSFULLY CONNECTED');
-            redisPub.publish('connection_status', JSON.stringify({ status: 'connected' }));
+            console.log('[Connection] 🚀 SUCCESSFULLY CONNECTED');
         }
     });
 
-    sock.ev.on('messages.upsert', async ({ messages }) => {
-        for (const msg of messages) {
-            if (msg.key.fromMe) continue;
-            const from = msg.key.remoteJid;
-            const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
-            if (!text) continue;
+    // 4. Inbound Messages
+    sock.ev.on('messages.upsert', async (m) => {
+        if (m.type === 'notify') {
+            for (const msg of m.messages) {
+                if (!msg.key.fromMe && msg.message) {
+                    const content = msg.message.conversation || 
+                                  msg.message.extendedTextMessage?.text || 
+                                  (msg.message.audioMessage ? "[Audio]" : "");
+                    
+                    if (!content) continue;
 
-            console.log(`[Inbound] From: ${from}, Msg: ${text}`);
-            await redisPub.publish('inbound', JSON.stringify({
-                from,
-                message: text,
-                messageId: msg.key.id,
-                timestamp: msg.messageTimestamp,
-                pushName: msg.pushName || 'there'
-            }));
-        }
-    });
+                    const payload = {
+                        from: msg.key.remoteJid,
+                        pushName: msg.pushName || 'User',
+                        message: content,
+                        messageId: msg.key.id,
+                        timestamp: msg.messageTimestamp,
+                    };
 
-    // ALWAYS request Pairing Code if a number is configured
-    if (PAIRING_PHONE_NUMBER && !sock.authState.creds.registered) {
-        setTimeout(async () => {
-            try {
-                const code = await sock.requestPairingCode(PAIRING_PHONE_NUMBER);
-                console.log('\n----------------------------');
-                console.log(`PAIRING CODE: ${code}`);
-                console.log('----------------------------\n');
-                await redisPub.publish('pairing_code', JSON.stringify({ code, phone: PAIRING_PHONE_NUMBER }));
-            } catch (err) {
-                console.error('[Pairing] Error:', err.message);
-            }
-        }, 3000);
-    }
-}
-
-
-function setupRedisListeners() {
-    redisSub.subscribe('outbound', (err) => {
-        if (!err) console.log('Subscribed to "outbound"');
-    });
-
-    redisSub.on('message', async (channel, message) => {
-        if (channel === 'outbound' && sock) {
-            const { to, response } = JSON.parse(message);
-            try {
-                await sock.sendPresenceUpdate('composing', to);
-                await delay(1000 + (response.length * 20));
-                await sock.sendMessage(to, { text: response });
-                await sock.sendPresenceUpdate('paused', to);
-            } catch (err) {
-                console.error('[Outbound Error]', err.message);
+                    await redisClient.publish(INBOUND_CHANNEL, JSON.stringify(payload));
+                }
             }
         }
     });
+
+    sock.ev.on('creds.update', saveCreds);
 }
 
-setupRedisListeners();
-connectToWhatsApp().catch(err => console.error('Bootstrap Error:', err));
+initRedis().then(startSock);
