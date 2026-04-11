@@ -93,14 +93,18 @@ async function connectToWhatsApp() {
             const message = lastDisconnect?.error?.message || 'Unknown error';
             console.log(`[Connection] Closed. Reason: ${statusCode} (${message})`);
 
-            if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
-                console.log('[Connection] Unauthorized/Logged Out. Clearing session for fresh restart...');
+            if (statusCode === DisconnectReason.loggedOut) {
+                console.log('[Connection] Logged out. Clearing session...');
                 try {
                     fs.rmSync(SESSION_DIR, { recursive: true, force: true });
                 } catch (e) {}
-                setTimeout(connectToWhatsApp, 8000);
+                setTimeout(connectToWhatsApp, 10000);
+            } else if (statusCode === 401) {
+                console.log('[Connection] Unauthorized (401). Retrying without clearing session first...');
+                // Give it one more chance before nuking session
+                setTimeout(connectToWhatsApp, 5000);
             } else {
-                console.log('[Connection] Reconnecting in 5s...');
+                console.log(`[Connection] Reconnecting in 5s... (Status: ${statusCode})`);
                 setTimeout(connectToWhatsApp, 5000);
             }
         } else if (connection === 'open') {
