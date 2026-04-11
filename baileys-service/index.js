@@ -70,7 +70,7 @@ async function connectToWhatsApp() {
         version,
         auth: state,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.windows('Desktop')
+        browser: Browsers.macOS('Desktop')
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -93,19 +93,18 @@ async function connectToWhatsApp() {
             const message = lastDisconnect?.error?.message || 'Unknown error';
             console.log(`[Connection] Closed. Reason: ${statusCode} (${message})`);
 
+            // DO NOT delete sessions automatically unless it's a manual logout
             if (statusCode === DisconnectReason.loggedOut) {
-                console.log('[Connection] Logged out. Clearing session...');
+                console.log('[Connection] Logged out manually. Clearing session...');
                 try {
                     fs.rmSync(SESSION_DIR, { recursive: true, force: true });
                 } catch (e) {}
-                setTimeout(connectToWhatsApp, 10000);
-            } else if (statusCode === 401) {
-                console.log('[Connection] Unauthorized (401). Retrying without clearing session first...');
-                // Give it one more chance before nuking session
-                setTimeout(connectToWhatsApp, 5000);
+                setTimeout(connectToWhatsApp, 15000);
             } else {
-                console.log(`[Connection] Reconnecting in 5s... (Status: ${statusCode})`);
-                setTimeout(connectToWhatsApp, 5000);
+                // For 401, 503, 515 etc., just wait and retry. 
+                // Don't nuke the session folder so pairing state is preserved.
+                console.log(`[Connection] Reconnecting in 10s... (Status: ${statusCode})`);
+                setTimeout(connectToWhatsApp, 10000);
             }
         } else if (connection === 'open') {
             console.log('[Connection] SUCCESSFULLY CONNECTED');
