@@ -5,7 +5,7 @@ import makeWASocket, {
     makeCacheableSignalKeyStore
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
-import { createClient } from 'redis';
+import Redis from 'ioredis';
 import fs from 'fs';
 
 // Logger
@@ -26,10 +26,9 @@ let sock;
 let redisClient;
 
 async function initRedis() {
-    redisClient = createClient({ url: REDIS_URL });
+    redisClient = new Redis(REDIS_URL);
     redisClient.on('error', (err) => console.log('[Redis] Client Error', err));
-    await redisClient.connect();
-    console.log('[Config] Redis connected.');
+    console.log('[Config] Redis initialized with ioredis.');
 }
 
 async function startSock() {
@@ -62,14 +61,20 @@ async function startSock() {
         markOnlineOnConnect: true,
     });
 
-    const subscriber = redisClient.duplicate();
-    await subscriber.connect();
-    await subscriber.subscribe(OUTBOUND_CHANNEL, async (message) => {
-        try {
-            const data = JSON.parse(message);
-            await sock.sendMessage(data.to, { text: data.message });
-        } catch (err) {
-            console.error('[Outbound] Error:', err.message);
+    // Handle Outbound
+    const subscriber = new Redis(REDIS_URL);
+    subscriber.subscribe(OUTBOUND_CHANNEL, (err, count) => {
+        if (err) console.error('[Redis] Subscribe error:', err.message);
+    });
+
+    subscriber.on('message', async (channel, message) => {
+        if (channel === OUTBOUND_CHANNEL) {
+            try {
+                const data = JSON.parse(message);
+                await sock.sendMessage(data.to, { text: data.message });
+            } catch (err) {
+                console.error('[Outbound] Error:', err.message);
+            }
         }
     });
 
