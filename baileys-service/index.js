@@ -67,10 +67,10 @@ async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
 
     sock = makeWASocket({
-        version: [2, 3000, 1015901307], // Stable Version
+        version,
         auth: state,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.macOS('Desktop'),
+        browser: ["Markeye Agent", "Chrome", "1.0.0"],
         keepAliveIntervalMs: 30000,
         printQRInTerminal: false
     });
