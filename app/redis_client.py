@@ -1,15 +1,14 @@
 import json
 import time
-from upstash_redis.asyncio import Redis
+from redis.asyncio import from_url, Redis
 from app.config import settings
 from typing import Optional, List, Dict, Any
 
 class RedisClient:
     def __init__(self):
-        self.redis = Redis(
-            url=settings.UPSTASH_REDIS_REST_URL, 
-            token=settings.UPSTASH_REDIS_REST_TOKEN
-        )
+        # Using standard Redis URL (RESP protocol over TCP/TLS)
+        # Upstash supports this on port 6379/36379
+        self.redis = from_url(settings.REDIS_URL, decode_responses=True)
 
     async def ping(self) -> bool:
         try:
@@ -102,9 +101,9 @@ class RedisClient:
             
             if not messages:
                 return ""
-                
-            texts = [m if isinstance(m, str) else m.decode() for m in messages]
-            return "\n".join(texts)
+            
+            # Using decode_responses=True in from_url, so messages are already strings
+            return "\n".join(messages)
         except Exception as e:
             print(f"[Redis] ❌ get_and_clear_buffer failed for {phone}: {e}", flush=True)
             return ""
@@ -146,7 +145,8 @@ class RedisClient:
 
     async def is_generating(self, phone: str) -> bool:
         try:
-            return await self.redis.exists(f"generating:{phone}") > 0
+            exists = await self.redis.exists(f"generating:{phone}")
+            return exists > 0
         except Exception as e:
             print(f"[Redis] ❌ is_generating failed: {e}", flush=True)
             return False
@@ -154,7 +154,8 @@ class RedisClient:
     async def has_new_messages(self, phone: str) -> bool:
         """Check if new messages arrived in buffer (during generation)."""
         try:
-            return await self.redis.llen(f"buffer:{phone}") > 0
+            length = await self.redis.llen(f"buffer:{phone}")
+            return length > 0
         except Exception as e:
             print(f"[Redis] ❌ has_new_messages failed: {e}", flush=True)
             return False
@@ -168,16 +169,13 @@ class RedisClient:
             return []
 
     async def has_sent_calendly(self, phone: str) -> bool:
-        return await self.redis.exists(f"calendly_sent:{phone}") > 0
+        exists = await self.redis.exists(f"calendly_sent:{phone}")
+        return exists > 0
 
     async def mark_calendly_sent(self, phone: str):
         await self.redis.set(f"calendly_sent:{phone}", "1", ex=86400 * 7)
 
     async def check_and_clear_stale_generation(self, phone: str):
-        """
-        If generating flag has been set for more than 2 minutes,
-        something crashed. Clear it so new messages can process.
-        """
         try:
             ts_key = f"generating_ts:{phone}"
             gen_key = f"generating:{phone}"
