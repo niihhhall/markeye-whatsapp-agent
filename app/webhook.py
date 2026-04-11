@@ -113,14 +113,14 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 try:
                     lu_dt = datetime.fromisoformat(last_updated.replace("Z", "+00:00"))
                     diff = (datetime.utcnow().replace(tzinfo=None) - lu_dt.replace(tzinfo=None)).total_seconds()
-                    if diff < 86400:  # Still within 24h cooldown — ignore
+                    if diff < 86400:  # Still within 24h cooldown - ignore
                         logger.info(f"[Webhook] {sender_phone} is CLOSED within 24h. Ignoring message.")
                         return {"status": "ignored", "reason": "closed_state"}
                     else:
-                        # 24h+ since close — re-open as returning lead
-                        logger.info(f"[Webhook] {sender_phone} returning after 24h+ — reopening session.")
+                        # 24h+ since close - re-open as returning lead
+                        logger.info(f"[Webhook] {sender_phone} returning after 24h+ - reopening session.")
                         lead_name = session.get("lead_data", {}).get("first_name", "there")
-                        returning_template = f"Hey {lead_name}, Mark here again from Markeye. Glad you came back — what changed?"
+                        returning_template = f"Hey {lead_name}, Mark here again from Markeye. Glad you came back - what changed?"
                         # Send template as single message
                         await send_message(sender_phone, returning_template)
                         # Re-initialise session

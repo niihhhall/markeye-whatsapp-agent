@@ -14,9 +14,9 @@ def fetch_live_logs(phones=None, limit=20, watch=False, monitor_all=False):
     lead_list = []
 
     if monitor_all:
-        print("🌍 GLOBAL MONITOR MODE: Watching ALL active leads...")
+        print("???? GLOBAL MONITOR MODE: Watching ALL active leads...")
     else:
-        print(f"📡 Connecting to Supabase for {len(phones)} lead(s)...")
+        print(f"???? Connecting to Supabase for {len(phones)} lead(s)...")
         for p in phones:
             try:
                 lead = tracker.get_lead_by_phone(p)
@@ -25,14 +25,14 @@ def fetch_live_logs(phones=None, limit=20, watch=False, monitor_all=False):
                     name = f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip() or p
                     lead_map[lead_id] = name
                     lead_list.append(lead_id)
-                    print(f"✅ Found: {name}")
+                    print(f"??? Found: {name}")
                 else:
-                    print(f"⚠️ Lead {p} not found.")
+                    print(f"?????? Lead {p} not found.")
             except Exception as e:
-                print(f"❌ Error finding {p}: {e}")
+                print(f"??? Error finding {p}: {e}")
 
     if not monitor_all and not lead_list:
-        print("❌ No valid leads to monitor.")
+        print("??? No valid leads to monitor.")
         return
 
     print("-" * 60)
@@ -53,7 +53,7 @@ def fetch_live_logs(phones=None, limit=20, watch=False, monitor_all=False):
             messages = result.data
             
             if not messages:
-                if reset: print("📭 No messages found yet.")
+                if reset: print("???? No messages found yet.")
                 return
 
             # Reverse to show chronological order
@@ -68,7 +68,7 @@ def fetch_live_logs(phones=None, limit=20, watch=False, monitor_all=False):
                 lead_info = msg.get("leads", {})
                 lead_name = f"{lead_info.get('first_name', '')} {lead_info.get('last_name', '')}".strip() or lead_info.get("phone", "Unknown")
                 
-                direction = f"👤 {lead_name}" if msg["direction"] == "inbound" else "🤖 Mark"
+                direction = f"???? {lead_name}" if msg["direction"] == "inbound" else "???? Mark"
                 time_str = msg.get("created_at", "").split(".")[0].replace("T", " ")
                 print(f"[{time_str}] {direction}: {msg['content']}")
                 
@@ -79,18 +79,18 @@ def fetch_live_logs(phones=None, limit=20, watch=False, monitor_all=False):
     # Initial fetch
     if reset := True:
         mode_str = "Global" if monitor_all else f"{len(lead_list)} lead(s)"
-        print(f"📜 Latest {mode_str} History (Last {limit}):")
+        print(f"???? Latest {mode_str} History (Last {limit}):")
         print_messages(limit, reset=True)
 
     if watch:
-        print(f"\n👀 WATCH MODE ACTIVE ({'Global' if monitor_all else 'Specific Leads'})")
+        print(f"\n???? WATCH MODE ACTIVE ({'Global' if monitor_all else 'Specific Leads'})")
         print("Waiting for new messages... (Ctrl+C to stop)")
         try:
             while True:
                 time.sleep(2)
                 print_messages(10)
         except KeyboardInterrupt:
-            print("\n🛑 Stopped monitoring.")
+            print("\n???? Stopped monitoring.")
 
 if __name__ == "__main__":
     phones = []

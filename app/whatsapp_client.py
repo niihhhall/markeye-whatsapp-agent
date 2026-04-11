@@ -150,7 +150,7 @@ async def send_typing_indicator(to: str, message_id: str = "") -> bool:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(f"{BASE_URL}/messages", headers=_headers(), json=payload)
             if resp.status_code == 200:
-                logger.info(f"[Typing] ✍️ Indicator sent for {to}")
+                logger.info(f"[Typing] INFO: Indicator sent for {to}")
                 return True
             else:
                 logger.debug(f"[Typing] Failed: {resp.status_code} - {resp.text}")

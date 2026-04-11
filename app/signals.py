@@ -97,7 +97,8 @@ def get_approach_instructions(interest: str, personality: str) -> str:
     Return approach instructions to inject into LLM context.
     Ensures that British Tone and ||| Chunking are still enforced.
     """
-    instructions = ["\n═══ DYNAMIC APPROACH INSTRUCTIONS ═══"]
+    # Dynamic Instructions helper
+    instructions = ["\n[DYNAMIC APPROACH INSTRUCTIONS]"]
     
     # Interest-based
     if interest == "buying":

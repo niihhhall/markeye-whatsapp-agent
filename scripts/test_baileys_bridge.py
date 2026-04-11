@@ -54,7 +54,7 @@ async def mock_baileys_flow():
                 return
         await asyncio.sleep(0.1)
 
-    print("\n❌ Verification FAILED: Timeout waiting for response.")
+    print("\n??? Verification FAILED: Timeout waiting for response.")
 
 if __name__ == "__main__":
     asyncio.run(mock_baileys_flow())

@@ -12,7 +12,7 @@ class SupabaseClient:
     async def get_client(self):
         async with self._lock:
             if self._client is None:
-                print("[Supabase] 🔄 Initializing Async Client...", flush=True)
+                print("[Supabase] Info: Initializing Async Client...", flush=True)
                 start = asyncio.get_event_loop().time()
                 from supabase import create_async_client
                 from supabase.client import ClientOptions
@@ -22,7 +22,7 @@ class SupabaseClient:
                     options=ClientOptions(postgrest_client_timeout=20)
                 )
                 end = asyncio.get_event_loop().time()
-                print(f"[Supabase] ✅ Async Client ready in {end-start:.2f}s", flush=True)
+                print(f"[Supabase] OK: Async Client ready in {end-start:.2f}s", flush=True)
             return self._client
 
 supabase_client = SupabaseClient()

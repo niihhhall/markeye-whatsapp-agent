@@ -12,11 +12,11 @@ import sentry_sdk
 import os
 
 # 1. Initialize Sentry (Operational Excellence)
-if os.getenv("SENTRY_DSN"):
+if settings.SENTRY_DSN:
     sentry_sdk.init(
-        dsn=os.getenv("SENTRY_DSN"),
+        dsn=settings.SENTRY_DSN,
         traces_sample_rate=0.1,
-        environment=os.getenv("ENVIRONMENT", "production")
+        environment=settings.ENVIRONMENT
     )
 
 # Configure logging to stdout
@@ -42,7 +42,7 @@ async def startup():
     from app.baileys_bridge import baileys_bridge
     import asyncio
     asyncio.create_task(baileys_bridge.start())
-    logger.info("✅ Baileys Bridge listener launched")
+    logger.info("OK: Baileys Bridge listener launched")
 
 # Allow CORS for the frontend dashboard
 app.add_middleware(

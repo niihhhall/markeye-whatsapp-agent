@@ -1,18 +1,21 @@
 import json
 import time
-import redis.asyncio as redis
+from upstash_redis.asyncio import Redis
 from app.config import settings
 from typing import Optional, List, Dict, Any
 
 class RedisClient:
     def __init__(self):
-        self.redis = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        self.redis = Redis(
+            url=settings.UPSTASH_REDIS_REST_URL, 
+            token=settings.UPSTASH_REDIS_REST_TOKEN
+        )
 
     async def ping(self) -> bool:
         try:
             return await self.redis.ping()
         except Exception as e:
-            print(f"[Redis] ❌ Ping failed: {e}", flush=True)
+            print(f"[Redis] ERROR: Ping failed: {e}", flush=True)
             return False
 
     async def get_session(self, phone: str) -> Optional[Dict[str, Any]]:
@@ -29,9 +32,9 @@ class RedisClient:
         try:
             # Persistent memory: 7 days TTL
             await self.redis.set(f"session:{phone}", json.dumps(session), ex=604800)
-            print(f"[Redis] ✅ Session saved for {phone}", flush=True)
+            print(f"[Redis] OK: Session saved for {phone}", flush=True)
         except Exception as e:
-            print(f"[Redis] ❌ save_session failed for {phone}: {e}", flush=True)
+            print(f"[Redis] ERROR: save_session failed for {phone}: {e}", flush=True)
 
     async def add_to_history(self, phone: str, role: str, content: str):
         try:
@@ -181,10 +184,10 @@ class RedisClient:
             
             ts = await self.redis.get(ts_key)
             if ts and (time.time() - float(ts)) > 120:
-                print(f"[Redis] ⚠️ Stale generation flag for {phone}, clearing", flush=True)
+                print(f"[Redis] WARN: Stale generation flag for {phone}, clearing", flush=True)
                 await self.redis.delete(gen_key, ts_key)
         except Exception as e:
-            print(f"[Redis] ❌ check_and_clear_stale_generation failed: {e}", flush=True)
+            print(f"[Redis] ERROR: check_and_clear_stale_generation failed: {e}", flush=True)
 
     async def get(self, key: str) -> Optional[str]:
         """Generic get for RAG context."""

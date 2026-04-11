@@ -50,7 +50,7 @@ class MarkTracker:
             if result.data:
                 lead = result.data[0]
                 await self._init_conversation_state(lead["id"])
-                print(f"[Mark Tracker] ✅ Lead created: {first_name} {last_name} ({phone})")
+                print(f"[Mark Tracker] OK: Lead created: {first_name} {last_name} ({phone})")
                 return lead
 
         except Exception as e:
@@ -68,7 +68,7 @@ class MarkTracker:
                 end = asyncio.get_event_loop().time()
                 
                 if attempt > 0:
-                    print(f"[Mark Tracker] ♻️ Retry {attempt} success in {end-start:.2f}s", flush=True)
+                    print(f"[Mark Tracker] INFO: Retry {attempt} success in {end-start:.2f}s", flush=True)
                 
                 return result.data[0] if result.data else None
             except Exception as e:
@@ -130,7 +130,7 @@ class MarkTracker:
         except Exception as e:
             print(f"[Markeye Tracker Error] update_outcome: {e}")
 
-    # ─── MESSAGES ────────────────────────────────────────────
+    # --- MESSAGES --------------------------------------------
 
     async def log_inbound(self, lead_id: str, content: str, client_id: Optional[str] = None, metadata: Optional[dict] = None) -> dict:
         """Call every time a lead sends Mark a WhatsApp message."""
@@ -172,7 +172,7 @@ class MarkTracker:
             print(f"[Markeye Tracker Error] log_outbound: {e}")
             return {}
 
-    # ─── CONVERSATION STATE ───────────────────────────────────
+    # --- CONVERSATION STATE ----------------------------------
 
     async def update_state(
         self,
@@ -243,7 +243,7 @@ class MarkTracker:
             # Auto-update lead outcome and conversation state
             await self.update_outcome(lead_id, "Meeting Booked")
             await self.update_state(lead_id, "Confirmed")
-            print(f"[Mark Tracker] ✅ Booking confirmed for lead {lead_id}")
+            print(f"[Mark Tracker] OK: Booking confirmed for lead {lead_id}")
             return result.data[0] if result.data else {}
         except Exception as e:
             print(f"[Markeye Tracker Error] confirm_booking: {e}")

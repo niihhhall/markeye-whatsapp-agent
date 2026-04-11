@@ -46,17 +46,17 @@ def get_embedding(text: str):
 def ingest_pdf(pdf_path: str):
     """Main ingestion pipeline."""
     if not os.path.exists(pdf_path):
-        print(f"❌ Error: File {pdf_path} not found.")
+        print(f"??? Error: File {pdf_path} not found.")
         return
 
-    print(f"📖 Reading PDF: {pdf_path}...")
+    print(f"???? Reading PDF: {pdf_path}...")
     full_text = extract_text_from_pdf(pdf_path)
     
-    print("✂️ Chunking text...")
+    print("?????? Chunking text...")
     chunks = chunk_text(full_text)
-    print(f"✅ Created {len(chunks)} chunks.")
+    print(f"??? Created {len(chunks)} chunks.")
 
-    print("🚀 Generating embeddings and uploading to Supabase...")
+    print("???? Generating embeddings and uploading to Supabase...")
     for i, chunk in enumerate(chunks):
         try:
             embedding = get_embedding(chunk)
@@ -67,9 +67,9 @@ def ingest_pdf(pdf_path: str):
             }).execute()
             print(f"  [{i+1}/{len(chunks)}] Uploaded chunk")
         except Exception as e:
-            print(f"  ❌ Error uploading chunk {i}: {e}")
+            print(f"  ??? Error uploading chunk {i}: {e}")
 
-    print("\n✨ Ingestion complete!")
+    print("\n??? Ingestion complete!")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

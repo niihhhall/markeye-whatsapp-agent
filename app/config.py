@@ -3,6 +3,7 @@ from functools import lru_cache
 import os
 
 class Settings(BaseSettings):
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "production")
     # WhatsApp Cloud API (Meta)
     WHATSAPP_PHONE_NUMBER_ID: str = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
     WHATSAPP_BUSINESS_ACCOUNT_ID: str = os.getenv("WHATSAPP_BUSINESS_ACCOUNT_ID", "")
@@ -34,11 +35,16 @@ class Settings(BaseSettings):
 
     # Redis
     REDIS_URL: str
+    UPSTASH_REDIS_REST_URL: str = os.getenv("UPSTASH_REDIS_REST_URL", "")
+    UPSTASH_REDIS_REST_TOKEN: str = os.getenv("UPSTASH_REDIS_REST_TOKEN", "")
 
     # Supabase
     SUPABASE_URL: str
     SUPABASE_KEY: str
     SUPABASE_SERVICE_KEY: str
+
+    # Sentry
+    SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
 
     # Calendly
     CALENDLY_LINK: str = "https://calendly.com/markeye/free-discovery-call"
