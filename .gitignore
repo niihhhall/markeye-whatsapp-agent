@@ -13,3 +13,8 @@ baileys-service/sessions/
 node_modules/
 media/
 tmp/
+.env*
+baileys-service/setup_server.sh
+baileys-service/sessions.zip
+*.zip
+.pytest_cache/
