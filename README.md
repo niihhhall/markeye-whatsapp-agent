@@ -1,6 +1,6 @@
 # 👁️ Markeye Mark: AI SDR Infrastructure v2.0.0
 
-![Markeye Mark](markeye_readme_header_1775911388041.png)
+
 
 > **High-Agency Pipeline for Predictable Growth.**
 > 
