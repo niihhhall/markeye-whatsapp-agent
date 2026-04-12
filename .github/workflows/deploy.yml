@@ -14,8 +14,18 @@ jobs:
           username: root
           key: ${{ secrets.DO_SSH_KEY }}
           script: |
-            cd markeye-whatsapp-agent
-            git pull origin main
+            # Ensure directory exists and clone if necessary
+            if [ ! -d "~/markeye-whatsapp-agent" ]; then
+              git clone https://github.com/niihhhall/markeye-whatsapp-agent.git ~/markeye-whatsapp-agent
+            fi
+            
+            cd ~/markeye-whatsapp-agent
+            git fetch origin main
+            git reset --hard origin/main
+            
+            # Restart services
             docker compose down
             docker compose up -d --build
-            docker system prune -af
+            
+            # Cleanup unused resources to prevent disk filling
+            docker system prune -f
