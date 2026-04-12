@@ -13,7 +13,6 @@ jobs:
           host: ${{ secrets.DO_HOST }}
           username: root
           key: ${{ secrets.DO_SSH_KEY }}
-          debug: true
           script: |
             # Ensure directory exists and clone if necessary
             if [ ! -d "~/markeye-whatsapp-agent" ]; then
