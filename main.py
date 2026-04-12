@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.webhook import router as webhook_router
 from app.outbound import router as outbound_router
-from app.calendly import router as calendly_router
+from app.calcom import router as calcom_router
 from app.training_api import router as training_router
 from app.dashboard import router as dashboard_router
 from app.config import settings
@@ -58,7 +58,7 @@ app.add_middleware(TelemetryMiddleware)
 
 app.include_router(webhook_router)
 app.include_router(outbound_router)
-app.include_router(calendly_router)
+app.include_router(calcom_router)
 app.include_router(training_router)
 app.include_router(dashboard_router)
 

@@ -46,8 +46,8 @@ class Settings(BaseSettings):
     # Sentry
     SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
 
-    # Calendly
-    CALENDLY_LINK: str = "https://calendly.com/markeye/free-discovery-call"
+    # Cal.com
+    CALCOM_LINK: str = os.getenv("CALCOM_LINK", "https://cal.com/markeye/free-discovery-call")
 
     # App
     DEBUG: bool = False
