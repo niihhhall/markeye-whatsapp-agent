@@ -8,7 +8,10 @@ class RedisClient:
     def __init__(self):
         # Using standard Redis URL (RESP protocol over TCP/TLS)
         # Upstash supports this on port 6379/36379
-        self.redis = from_url(settings.REDIS_URL, decode_responses=True)
+        # Workaround for persistent [Errno 11001] getaddrinfo failed on Windows asyncio
+        # Bypassing DNS via direct IP and disabling SSL verification for this session.
+        redis_url = settings.REDIS_URL.replace("sure-dinosaur-70447.upstash.io", "3.111.132.11")
+        self.redis = from_url(redis_url, decode_responses=True, ssl_cert_reqs=None)
 
     async def ping(self) -> bool:
         try:
