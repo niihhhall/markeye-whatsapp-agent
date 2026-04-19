@@ -1,104 +1,105 @@
-# 👁️ Mark: AI SDR Infrastructure v2.0.0
+# 👁️ Mark AI SDR — Elite Agent Infrastructure v2.0.0
 
-
+[![Python](https://img.shields.io/badge/Backend-Python_3.10+-blue?logo=python&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Node.js](https://img.shields.io/badge/Relay-Node.js_18+-green?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/Frontend-React_18+-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+[![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph-orange?logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
 
 > **High-Agency Pipeline for Predictable Growth.**
 > 
-> Mark is a production-grade AI SDR infrastructure designed to handle inbound lead qualification, real-time interactive engagement, and automated sales orchestration with zero-cost inference and zero-latency execution.
+> Mark is a production-grade AI SDR infrastructure designed to handle inbound lead qualification, real-time interactive engagement, and automated sales orchestration. Moving beyond simple bots, v2.0.0 introduces the **SalesGPT Dual-Chain** architecture for semantic conversation control.
 
 ---
 
-## 🚀 The v2.0.0 Alpha Rebuild
+## 🚀 The v2.0.0 "Elite SDR" Overhaul
 
-This version represents a total architectural pivot from a basic bot to a scalable, multi-tenant AI infrastructure.
+This version represents a total architectural pivot from a basic bot to a scalable, multi-tenant AI infrastructure inspired by the top 1% of open-source sales agents.
 
 ### 🧠 Intelligence & Orchestration
-- **Smart LLM Router**: Dynamic fallback between **Groq**, **Cerebras**, and **Gemini**. High performance with practically zero operational cost.
-- **Trigger-Action Engine**: LLM-driven execution of interactive polls, pricing delivery, and human sales escalations.
-- **Semantic Cache**: Vecto-base cache for lightning-fast responses to common intents, bypassing LLM costs and latency.
-- **High-Agency BANT**: Context-aware qualification that moves at the speed of human conversation.
+- **LangGraph State Machine**: 9-node orchestration graph replacing monolithic logic with isolated, testable phases (Context → Analyze → Generate → Deliver).
+- **SalesGPT Dual-Chain**: A semantic stage analyzer independent of the generator. It detects if a lead is in *Discovery*, *Qualification*, or *Booking* based on history, not just turn count.
+- **BANT Extraction Engine**: Automated semantic scoring for **B**udget, **A**uthority, **N**eed, and **T**imeline that gates stage transitions.
+- **Interrupt Protection**: Robust silence-buffering that pauses AI generation if the user sends follow-up messages during processing.
 
-### 📱 WhatsApp Mastery (Baileys v2)
-- **Interactive Polls**: Friction-less lead qualification via WhatsApp-native multi-choice interactions.
-- **Remote Onboarding**: Authentication via Pairing Codes — no physical QR scanning required.
-- **Media Cloud-Sync**: Inbound images, docs, and voice notes are automatically uploaded to **Supabase Storage** and served via public URLs.
-- **Natural Touch**: Probabilistic reactions (`👍`), human typing delays, and rich link previews for Calendly.
+### 📱 Neural Tactical UI (`/admin`)
+- **Integrated React Dashboard**: New high-agency dashboard built with a "Neural Tactical OS" / "Iron Man" aesthetic.
+- **Node Management**: Real-time visibility into all $N$ WhatsApp instances.
+- **One-Click Pairing**: Scan QR codes directly in the browser to establish new tactical relays in seconds.
+- **Live Metrics**: Monitor token burn, cost USD, and relay health for each client.
 
 ### 🏗️ Infrastructure & Scale
-- **Multi-Tenant Architecture**: One deployment serves unlimited clients with isolated branding, system prompts, and knowledge bases.
-- **Docker Orchestration**: Unified Compose setup for FastAPI (Conversation Engine) and Node.js (WhatsApp Sidecar).
-- **Training Pipeline**: Automated pipeline for collecting, labeling, and exporting conversation data for fine-tuning.
-- **Production Guardrails**: Instrumented with **Sentry** (telemetry) and **Redis** (atomic execution).
+- **Multi-Session Baileys Relay**: A dedicated Node.js service managing concurrent WhatsApp connections with Redis-backed authentication.
+- **Redis Persistence**: Centralized auth state and conversation history, allowing for persistent sessions across container restarts.
+- **Multi-Tenant Agency Logic**: Isolated knowledge bases, branding, and Calendly links for unlimited clients.
 
 ---
 
-## 🛠️ Architecture
+## 🛠️ System Architecture
 
 ```mermaid
 graph TD
-    User((WhatsApp User)) <--> B(Baileys Sidecar)
-    B <--> R[(Redis Sync)]
-    R <--> F[FastAPI Engine]
-    F <--> S[(Supabase)]
-    F <--> L[LLM Router]
-    L --- G[Groq]
-    L --- C[Cerebras]
-    L --- Ge[Gemini]
-    F <--> K[Knowledge Base]
+    User((WhatsApp User)) <--> B(Baileys Relay Node)
+    B <--> R[(Redis / PubSub)]
+    R <--> LG[LangGraph Engine]
+    LG --- SA[Stage Analyzer]
+    LG --- RG[Response Generator]
+    LG --- BT[BANT Extractor]
+    LG <--> S[(Supabase)]
+    LG <--> KB[Knowledge Base]
+    LG <--> C[Admin Dashboard]
 ```
 
 ---
 
-## 🚦 Quickstart
+## 🚦 Setup & Deployment
 
-### 1. Environment Setup
-Clone the repo and configure your `.env` (see `.env.example` for the full schema).
+### 1. Environment Configuration
+Clone the repository and copy `.env.example` to `.env`. Ensure you provide:
+- **Supabase**: URL and Service Keys.
+- **Redis**: Connection string (Upstash fully supported).
+- **LLM Keys**: Groq (Primary), Gemini (Stage Analyzer), and Cerebras (Fallback).
 
+### 2. Launch the Backend (Python)
 ```bash
-# Core Credentials
-REDIS_URL=redis://localhost:6379
-SUPABASE_URL=your_url
-SUPABASE_KEY=your_key
-
-# Choose your path
-AUTH_MODE=qr # or pairing
+pip install -r requirements.txt
+python main.py
 ```
 
-### 2. Launch
-The platform is fully containerized for one-click deployment.
-
+### 3. Launch the Relay (Node.js)
 ```bash
-docker-compose up --build -d
+cd baileys-service
+npm install
+npm run dev
 ```
 
-### 3. Monitoring
-Access logs via Docker or monitor real-time exceptions and latency through Sentry.
-
+### 4. Setup the Dashboard (React)
 ```bash
-docker-compose logs -f fastapi
+cd after5-agent-front
+npm install
+npm run dev
 ```
+*Note: The Python backend automatically serves the built dashboard in production at the `/admin` route.*
 
 ---
 
-## 🎯 Trigger Tags (For AI Orchestration)
-
-Mark can execute complex maneuvers mid-conversation. Just include these tags in the system prompt:
-
-- `[SEND_BOOKING_POLL]` — Launch interactive scheduling.
-- `[SEND_PRICING]` — Dispatch sales collateral.
-- `[SEND_CALENDLY]` — Drop a rich link preview.
-- `[ESCALATE]` — Hand over to a human rep.
+## 🎯 Trigger Maneuvers
+Include these tags in your knowledge base or system prompt to trigger agent actions:
+- `[SEND_PRICING]` — Dispatches sales collateral immediately.
+- `[SEND_CALENDLY]` — Drops a rich link preview for scheduling.
+- `[ESCALATE]` — Triggers an SMS/WA notification to a human rep.
+- `[SEND_POLL]` — Launches a native WhatsApp qualification poll.
 
 ---
 
-## 📈 Roadmap & ROI
-- [x] Multi-tenant Client Management
-- [x] Zero-Cost LLM Fallback (Smart Router)
-- [x] Supabase Storage Ingestion
-- [ ] Voice-to-Voice Realtime (Next)
-- [ ] Financial ROI Dashboard (In Progress)
+## 📈 Roadmap
+- [x] LangGraph Migration
+- [x] Multi-Session Baileys Relay
+- [x] SalesGPT Semantic Stage Analyzer
+- [x] Integrated Neural Admin UI
+- [ ] Voice-to-Voice Real-time (Active Dev)
+- [ ] Automated Financial ROI Tracker
 
 ---
 
 **Built by the Markeye Engineering Team.**  
-*Shift from manual outreach to scalable infrastructure.*
+*Shifting from simple code to high-agency engineering.*
