@@ -30,5 +30,11 @@ services:
           cpus: '0.4'
           memory: 384M
 
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
 volumes:
   baileys_sessions:

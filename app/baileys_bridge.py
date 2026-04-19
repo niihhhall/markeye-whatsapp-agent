@@ -68,25 +68,28 @@ class BaileysBridge:
             await redis_client.redis.set(dedup_key, "1", ex=86400)
 
             # 3. Generation Cleanup & Setup
+            client_id = data.get("sessionId")
             await redis_client.check_and_clear_stale_generation(sender_phone)
 
             # 4. Buffer the message
-            batch_id = await redis_client.buffer_message(sender_phone, message_text)
+            batch_id, is_first = await redis_client.buffer_message(sender_phone, message_text)
             
             # Store metadata for processing
             await redis_client.redis.set(f"last_msg_id:{sender_phone}", message_id, ex=300)
             await redis_client.redis.set(f"last_name:{sender_phone}", sender_name, ex=300)
+            if client_id:
+                await redis_client.redis.set(f"client_id:{sender_phone}", client_id, ex=300)
 
             # 5. Fire delayed processor (reusing webhook logic)
             # Since we don't have BackgroundTasks here, we use create_task
-            asyncio.create_task(delayed_buffer_process(sender_phone, batch_id, message_ts))
+            asyncio.create_task(delayed_buffer_process(sender_phone, batch_id, message_ts, client_id=client_id))
 
             # 6. Fire hard-max safety check
-            if not await redis_client.redis.get(f"buffer_first:{sender_phone}"):
-                asyncio.create_task(hard_max_check(sender_phone, message_ts))
+            if is_first:
+                asyncio.create_task(hard_max_check(sender_phone, message_ts, client_id=client_id))
 
             # 7. Tracker Log
-            asyncio.create_task(background_tracker_log(sender_phone, sender_name, message_text))
+            asyncio.create_task(background_tracker_log(sender_phone, sender_name, message_text, client_id=client_id))
 
         except Exception as e:
             logger.error(f"[Baileys Bridge] ❌ Failed to handle message: {e}")

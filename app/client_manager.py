@@ -94,11 +94,44 @@ class ClientManager:
         """List all active clients."""
         try:
             client = await supabase_client.get_client()
-            res = await client.table("clients").select("id, business_name, whatsapp_number, active").execute()
+            res = await client.table("clients").select("*").eq("active", True).execute()
             return res.data or []
         except Exception as e:
             logger.error(f"[ClientManager] Error listing clients: {e}")
             return []
+
+    async def init_all_clients(self):
+        """
+        Auto-load all clients from Supabase and signal Baileys service to start sessions.
+        Called on startup (Module 6 pattern).
+        """
+        import httpx
+        from app.config import settings
+
+        logger.info("[ClientManager] 🚀 Initializing all clients from Supabase...")
+        clients = await self.list_clients()
+        
+        baileys_api_url = settings.BAILEYS_API_URL or "http://localhost:3001"
+        
+        for client in clients:
+            client_id = client.get("id")
+            whatsapp_number = client.get("whatsapp_number")
+            if not client_id: continue
+
+            logger.info(f"[ClientManager] Starting session for {client.get('business_name')} ({client_id})")
+            try:
+                # Signal the Baileys JS service to start this session
+                async with httpx.AsyncClient() as http_client:
+                    await http_client.post(
+                        f"{baileys_api_url}/sessions/start",
+                        json={
+                            "sessionId": client_id,
+                            "phoneNumber": whatsapp_number
+                        },
+                        timeout=5.0
+                    )
+            except Exception as e:
+                logger.error(f"[ClientManager] Failed to signal Baileys for client {client_id}: {e}")
 
     def invalidate_cache(self, client_id: Optional[str] = None):
         """Clear cache for specific client or all."""

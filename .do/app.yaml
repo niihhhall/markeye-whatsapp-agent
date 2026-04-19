@@ -1,0 +1,29 @@
+name: markeye-whatsapp-agent
+region: lhr
+services:
+  - name: fastapi-api
+    github:
+      repo: niihhhall/markeye-whatsapp-agent
+      branch: main
+      deploy_on_push: true
+    source_dir: /
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb
+    run_command: uvicorn main:app --host 0.0.0.0 --port 8080
+    http_port: 8080
+    envs:
+      - key: ENVIRONMENT
+        value: production
+workers:
+  - name: baileys-service
+    github:
+      repo: niihhhall/markeye-whatsapp-agent
+      branch: main
+      deploy_on_push: true
+    source_dir: /baileys-service
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb
+    run_command: npm start
+    envs:
+      - key: ENVIRONMENT
+        value: production

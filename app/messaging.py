@@ -6,18 +6,17 @@ from app import whatsapp_client as cloud
 
 logger = logging.getLogger(__name__)
 
-async def send_message(to: str, body: str) -> dict | None:
+async def send_message(to: str, body: str, client_id: str = None) -> dict | None:
     """Send a message using the active provider."""
-    # TODO: Multi-session Baileys support - route to the correct client phone number
     provider = settings.MESSAGING_PROVIDER
     
     if provider == "baileys":
-        logger.info(f"[Messaging] Publishing outbound to Baileys: {to}")
-        # Normalize to to pure phone id for Redis payload
+        logger.info(f"[Messaging] Publishing outbound to Baileys ({client_id}): {to}")
         phone_id = to.split(':')[-1] if ':' in to else to
         payload = {
+            "sessionId": client_id,
             "to": f"{phone_id}@s.whatsapp.net",
-            "response": body,
+            "message": body,
             "replyToMessageId": await redis_client.redis.get(f"last_msg_id:{to}")
         }
         await redis_client.redis.publish("outbound", json.dumps(payload))
@@ -25,12 +24,13 @@ async def send_message(to: str, body: str) -> dict | None:
     
     return await cloud.send_message(to, body)
 
-async def send_media(to: str, media_type: str, url: str, caption: str = "") -> dict | None:
+async def send_media(to: str, media_type: str, url: str, caption: str = "", client_id: str = None) -> dict | None:
     """Send media (image, document, audio) using Baileys."""
     provider = settings.MESSAGING_PROVIDER
     if provider == "baileys":
         phone_id = to.split(':')[-1] if ':' in to else to
         payload = {
+            "sessionId": client_id,
             "to": f"{phone_id}@s.whatsapp.net",
             "type": media_type,
             "url": url,
@@ -62,6 +62,15 @@ async def mark_as_read(conversation_id: str, message_id: str) -> bool:
     """Mark a message as read."""
     provider = settings.MESSAGING_PROVIDER
     if provider == "baileys":
+        if not message_id: return False
+        
+        # Parse conversation id (phone)
+        phone_id = conversation_id.split(':')[-1] if ':' in conversation_id else conversation_id
+        payload = {
+            "to": f"{phone_id}@s.whatsapp.net",
+            "messageId": message_id
+        }
+        await redis_client.redis.publish("outbound:mark_read", json.dumps(payload))
         return True
     return await cloud.mark_as_read(message_id)
 
@@ -70,31 +79,43 @@ async def send_chunked_messages(
     chunks: list[str], 
     incoming_text: str = "", 
     last_message_ts: float = 0, 
-    message_id: str = ""
+    message_id: str = "",
+    client_id: str = None
 ) -> None:
-    """Send chunked messages. Baileys handles its own chunking from a single response."""
+    """Send chunked messages with delays."""
+    import asyncio
     provider = settings.MESSAGING_PROVIDER
     
     if provider == "baileys":
-        full_text = " ".join(chunks)
-        await send_message(to, full_text)
+        for idx, chunk in enumerate(chunks):
+            await send_message(to, chunk, client_id=client_id)
+            if idx < len(chunks) - 1:
+                await send_typing_indicator(to, client_id=client_id)
+                await asyncio.sleep(settings.CHUNK_DELAY_SECONDS)
         return
 
     return await cloud.send_chunked_messages(to, chunks, incoming_text, last_message_ts, message_id)
 
-async def send_typing_indicator(to: str, conversation_id: str = "", message_id: str = "") -> bool:
+async def send_typing_indicator(to: str, conversation_id: str = "", message_id: str = "", client_id: str = None) -> bool:
     """Send typing indicator."""
     provider = settings.MESSAGING_PROVIDER
     if provider == "baileys":
+        phone_id = to.split(':')[-1] if ':' in to else to
+        payload = {
+            "sessionId": client_id,
+            "to": f"{phone_id}@s.whatsapp.net"
+        }
+        await redis_client.redis.publish("outbound:typing", json.dumps(payload))
         return True
     return await cloud.send_typing_indicator(to, message_id)
 
-async def send_poll(to: str, question: str, options: list[str]) -> dict | None:
+async def send_poll(to: str, question: str, options: list[str], client_id: str = None) -> dict | None:
     """Send a poll using Baileys."""
     provider = settings.MESSAGING_PROVIDER
     if provider == "baileys":
         phone_id = to.split(':')[-1] if ':' in to else to
         payload = {
+            "sessionId": client_id,
             "to": f"{phone_id}@s.whatsapp.net",
             "question": question,
             "options": options

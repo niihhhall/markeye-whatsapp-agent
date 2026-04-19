@@ -60,6 +60,13 @@ def _compute_scoring_status(session: dict, current_message: str) -> str:
 
 
 class LLMClient:
+    """
+    High-level LLM wrapper managing Markeye business logic, RAG context injection, 
+    and prompt building.
+    
+    Delegates the actual API generation to the `llm_router` module (SmartLLMRouter) 
+    which handles multi-provider fallbacks (Groq -> Gemini -> Cerebras).
+    """
     def __init__(self):
         # We now use the router instead of a direct client
         self.router = llm_router

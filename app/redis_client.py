@@ -6,12 +6,11 @@ from typing import Optional, List, Dict, Any
 
 class RedisClient:
     def __init__(self):
-        # Using standard Redis URL (RESP protocol over TCP/TLS)
-        # Upstash supports this on port 6379/36379
-        # Workaround for persistent [Errno 11001] getaddrinfo failed on Windows asyncio
-        # Bypassing DNS via direct IP and disabling SSL verification for this session.
-        redis_url = settings.REDIS_URL.replace("sure-dinosaur-70447.upstash.io", "3.111.132.11")
-        self.redis = from_url(redis_url, decode_responses=True, ssl_cert_reqs=None)
+        redis_url = settings.REDIS_URL
+        kwargs = {"decode_responses": True}
+        if redis_url.startswith("rediss://"):
+            kwargs["ssl_cert_reqs"] = "none"
+        self.redis = from_url(redis_url, **kwargs)
 
     async def ping(self) -> bool:
         try:
@@ -69,8 +68,8 @@ class RedisClient:
             print(f"[Redis] ❌ check_dedup failed: {e}", flush=True)
             return False
 
-    async def buffer_message(self, phone: str, message: str) -> str:
-        """Adds message to input buffer list and tracks first message time. Returns new batch_id."""
+    async def buffer_message(self, phone: str, message: str) -> tuple[str, bool]:
+        """Adds message to input buffer list and tracks first message time. Returns (new_batch_id, is_first)."""
         import uuid
         try:
             key = f"buffer:{phone}"
@@ -80,17 +79,19 @@ class RedisClient:
             await self.redis.rpush(key, message)
             await self.redis.expire(key, 60)
             
+            is_first = False
             if not await self.redis.exists(first_key):
                 await self.redis.set(first_key, str(time.time()), ex=60)
+                is_first = True
             
             new_batch_id = str(uuid.uuid4())
             await self.redis.set(batch_key, new_batch_id, ex=60)
                 
             print(f"[Redis] ✅ Buffered message for {phone}, batch {new_batch_id}", flush=True)
-            return new_batch_id
+            return new_batch_id, is_first
         except Exception as e:
             print(f"[Redis] ❌ buffer_message failed for {phone}: {e}", flush=True)
-            return "error_batch"
+            return "error_batch", False
 
     async def get_and_clear_buffer(self, phone: str) -> str:
         """Returns all buffered messages joined correctly and clears the buffer."""

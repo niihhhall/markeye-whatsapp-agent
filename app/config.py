@@ -3,40 +3,40 @@ from functools import lru_cache
 import os
 
 class Settings(BaseSettings):
-    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "production")
+    ENVIRONMENT: str = "production"
     # WhatsApp Cloud API (Meta)
-    WHATSAPP_PHONE_NUMBER_ID: str = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
-    WHATSAPP_BUSINESS_ACCOUNT_ID: str = os.getenv("WHATSAPP_BUSINESS_ACCOUNT_ID", "")
-    WHATSAPP_ACCESS_TOKEN: str = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
-    WHATSAPP_VERIFY_TOKEN: str = os.getenv("WHATSAPP_VERIFY_TOKEN", "markeye_verify_token")
-    WHATSAPP_API_VERSION: str = os.getenv("WHATSAPP_API_VERSION", "v21.0")
+    WHATSAPP_PHONE_NUMBER_ID: str = ""
+    WHATSAPP_BUSINESS_ACCOUNT_ID: str = ""
+    WHATSAPP_ACCESS_TOKEN: str = ""
+    WHATSAPP_VERIFY_TOKEN: str = "markeye_verify_token"
+    WHATSAPP_API_VERSION: str = "v21.0"
     MESSAGING_PROVIDER: str = "whatsapp_cloud"
 
     # OpenAI
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_API_KEY: str = ""
     PRIMARY_MODEL: str = "gpt-4o"
     FALLBACK_MODEL: str = "gpt-4o-mini"
     BANT_MODEL: str = "gpt-4o-mini"
 
     # Groq (Primary)
-    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
-    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
 
     # Gemini (Secondary)
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-1.5-flash"
 
     # Cerebras (Fallback)
-    CEREBRAS_API_KEY: str = os.getenv("CEREBRAS_API_KEY", "")
-    CEREBRAS_MODEL: str = os.getenv("CEREBRAS_MODEL", "llama3.1-70b")
+    CEREBRAS_API_KEY: str = ""
+    CEREBRAS_MODEL: str = "llama3.1-70b"
 
     # Legacy OpenRouter (Optional Fallback)
-    OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
+    OPENROUTER_API_KEY: str = ""
 
     # Redis
     REDIS_URL: str
-    UPSTASH_REDIS_REST_URL: str = os.getenv("UPSTASH_REDIS_REST_URL", "")
-    UPSTASH_REDIS_REST_TOKEN: str = os.getenv("UPSTASH_REDIS_REST_TOKEN", "")
+    UPSTASH_REDIS_REST_URL: str = ""
+    UPSTASH_REDIS_REST_TOKEN: str = ""
 
     # Supabase
     SUPABASE_URL: str
@@ -44,10 +44,10 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_KEY: str
 
     # Sentry
-    SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
+    SENTRY_DSN: str = ""
 
     # Cal.com
-    CALCOM_LINK: str = os.getenv("CALCOM_LINK", "https://cal.com/markeye/free-discovery-call")
+    CALCOM_LINK: str = "https://cal.com/markeye/free-discovery-call"
 
     # App
     DEBUG: bool = False
@@ -75,8 +75,8 @@ class Settings(BaseSettings):
     BAILEYS_AUTH_DIR: str = "./baileys-service/sessions"
     WHATSAPP_INBOUND_CHANNEL: str = "inbound"
     WHATSAPP_OUTBOUND_CHANNEL: str = "outbound"
-    SALES_PHONE_NUMBER: str = os.getenv("SALES_PHONE_NUMBER", "")
-    PRICING_PDF_URL: str = os.getenv("PRICING_PDF_URL", "https://markeye.io/pricing-overview.pdf")
+    SALES_PHONE_NUMBER: str = ""
+    PRICING_PDF_URL: str = "https://markeye.io/pricing-overview.pdf"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

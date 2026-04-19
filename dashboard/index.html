@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markeye | SDR Management Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --primary: #ff3e3e;
+            --primary-glow: rgba(255, 62, 62, 0.4);
+            --secondary: #3e82ff;
+            --bg-dark: #0a0a0c;
+            --card-bg: rgba(20, 20, 25, 0.7);
+            --border-glass: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg-dark);
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(255, 62, 62, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(62, 130, 255, 0.05) 0%, transparent 40%);
+            min-height: 100vh;
+        }
+
+        h1, h2, h3 {
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Nav */
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 0;
+            margin-bottom: 3rem;
+            border-bottom: 1px solid var(--border-glass);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .logo span {
+            color: var(--primary);
+            text-shadow: 0 0 10px var(--primary-glow);
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-glass);
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: #aaa;
+        }
+
+        .pulse {
+            width: 8px;
+            height: 8px;
+            background: #4caf50;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #4caf50;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0.7; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.7; }
+        }
+
+        /* Grid */
+        .session-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 2rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-glass);
+            border-radius: 20px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(255, 62, 62, 0.3);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            opacity: 0.5;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1.5rem;
+        }
+
+        .client-info h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .client-info p {
+            font-size: 0.9rem;
+            color: #888;
+        }
+
+        .badge {
+            padding: 0.3rem 0.8rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge.online { background: rgba(76, 175, 80, 0.2); color: #81c784; border: 1px solid rgba(76, 175, 80, 0.3); }
+        .badge.pairing { background: rgba(255, 193, 7, 0.2); color: #ffd54f; border: 1px solid rgba(255, 193, 7, 0.3); }
+        .badge.offline { background: rgba(244, 67, 54, 0.2); color: #e57373; border: 1px solid rgba(244, 67, 54, 0.3); }
+
+        .card-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 1rem;
+            border-radius: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-val {
+            display: block;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 0.75rem;
+            border-radius: 12px;
+            border: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 4px 15px var(--primary-glow);
+        }
+
+        .btn-primary:hover {
+            transform: scale(1.02);
+            filter: brightness(1.1);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border-glass);
+            color: #ccc;
+        }
+
+        .btn-outline:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: var(--bg-dark);
+            border: 1px solid var(--border-glass);
+            border-radius: 24px;
+            width: 90%;
+            max-width: 400px;
+            padding: 2.5rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 1.5rem;
+            right: 1.5rem;
+            cursor: pointer;
+            color: #666;
+        }
+
+        #qr-container {
+            background: #fff;
+            padding: 1rem;
+            border-radius: 12px;
+            margin: 2rem 0;
+            display: inline-block;
+        }
+
+        #qr-img {
+            width: 200px;
+            height: 200px;
+        }
+
+        .loader {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--primary);
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Empty state */
+        .empty-state {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 5rem 2rem;
+            color: #666;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav>
+            <div class="logo">
+                <i data-lucide="zap"></i>
+                MARKEYE <span>SDR</span>
+            </div>
+            <div class="status-pill">
+                <div class="pulse"></div>
+                Backend: Online
+            </div>
+        </nav>
+
+        <header style="margin-bottom: 3rem;">
+            <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem;">Session Management</h1>
+            <p style="color: #888;">Control active WhatsApp AI agents for all clients.</p>
+        </header>
+
+        <div id="session-grid" class="session-grid">
+            <!-- Dynamic Content -->
+            <div class="empty-state">
+                <div class="loader"></div>
+                <p>Establishing neural link...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR Modal -->
+    <div id="qr-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-close" onclick="closeModal()">
+                <i data-lucide="x"></i>
+            </div>
+            <h2 style="margin-bottom: 0.5rem;">Pair Device</h2>
+            <p style="color: #888; font-size: 0.9rem;">Scan this QR code with WhatsApp to activate the agent for this client.</p>
+            
+            <div id="qr-content">
+                <div id="qr-container">
+                    <img id="qr-img" src="" alt="QR Code">
+                </div>
+            </div>
+
+            <p id="qr-status" style="font-size: 0.8rem; color: var(--primary); font-weight: 600;">Waiting for code...</p>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Icons
+        lucide.createIcons();
+
+        const API_BASE = '/dashboard';
+        let currentState = [];
+
+        async function fetchSessions() {
+            try {
+                // 1. Get clients from Supabase via our backend
+                const clientsRes = await fetch(`${API_BASE}/clients`);
+                const clients = await clientsRes.json();
+
+                // 2. Get session statuses from Baileys microservice (via backend proxy)
+                const sessionsRes = await fetch(`${API_BASE}/sessions`);
+                const sessionsData = await sessionsRes.json();
+                
+                renderSessions(clients, sessionsData);
+            } catch (err) {
+                console.error("Dashboard link failed:", err);
+            }
+        }
+
+        function renderSessions(clients, sessions) {
+            const grid = document.getElementById('session-grid');
+            grid.innerHTML = '';
+
+            if (clients.length === 0) {
+                grid.innerHTML = '<div class="empty-state"><i data-lucide="users"></i><p>No clients found in database.</p></div>';
+                lucide.createIcons();
+                return;
+            }
+
+            clients.forEach(client => {
+                const session = Array.isArray(sessions) ? sessions.find(s => s.sessionId === client.id) : null;
+                const status = session ? session.status : 'offline';
+                
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <div class="card-header">
+                        <div class="client-info">
+                            <h3>${client.business_name}</h3>
+                            <p>${client.whatsapp_number}</p>
+                        </div>
+                        <span class="badge ${status}">${status}</span>
+                    </div>
+                    
+                    <div class="card-stats">
+                        <div class="stat-item">
+                            <span class="stat-val" id="leads-${client.id}">...</span>
+                            <span class="stat-label">Total Leads</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-val" id="conversion-${client.id}">...</span>
+                            <span class="stat-label">Conversion</span>
+                        </div>
+                    </div>
+
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="showQR('${client.id}')" ${status === 'connected' ? 'disabled style="opacity: 0.5"' : ''}>
+                            <i data-lucide="qr-code"></i> ${status === 'connected' ? 'Active' : 'Pair Device'}
+                        </button>
+                        <button class="btn btn-outline" onclick="restartSession('${client.id}')">
+                            <i data-lucide="refresh-cw"></i>
+                        </button>
+                    </div>
+                `;
+                grid.appendChild(card);
+                fetchStats(client.id);
+            });
+
+            lucide.createIcons();
+        }
+
+        async function fetchStats(clientId) {
+            try {
+                const res = await fetch(`${API_BASE}/clients/${clientId}/stats`);
+                const stats = await res.json();
+                document.getElementById(`leads-${clientId}`).innerText = stats.total_leads || 0;
+                document.getElementById(`conversion-${clientId}`).innerText = (stats.conversion_rate || 0).toFixed(0) + '%';
+            } catch (e) {}
+        }
+
+        async function showQR(clientId) {
+            const modal = document.getElementById('qr-modal');
+            const qrImg = document.getElementById('qr-img');
+            const qrStatus = document.getElementById('qr-status');
+            
+            modal.style.display = 'flex';
+            qrImg.style.display = 'none';
+            qrStatus.innerText = "Requesting new session...";
+
+            // First, ensure session is started
+            await fetch(`${API_BASE}/sessions/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId: clientId })
+            });
+
+            // Poll for QR
+            let attempts = 0;
+            const poll = setInterval(async () => {
+                attempts++;
+                const res = await fetch(`${API_BASE}/sessions/${clientId}/qr`);
+                const data = await res.json();
+                
+                if (data.qr) {
+                    clearInterval(poll);
+                    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(data.qr)}`;
+                    qrImg.style.display = 'inline-block';
+                    qrStatus.innerText = "Scan now!";
+                    qrStatus.style.color = "#4caf50";
+                }
+
+                if (attempts > 30) {
+                    clearInterval(poll);
+                    qrStatus.innerText = "Pairing timed out. Try again.";
+                }
+            }, 2000);
+        }
+
+        async function restartSession(clientId) {
+            if (!confirm("Restart session for this client?")) return;
+            await fetch(`${API_BASE}/sessions/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId: clientId })
+            });
+            fetchSessions();
+        }
+
+        function closeModal() {
+            document.getElementById('qr-modal').style.display = 'none';
+        }
+
+        // Initial fetch and poll
+        fetchSessions();
+        setInterval(fetchSessions, 10000);
+    </script>
+</body>
+</html>

@@ -24,6 +24,11 @@ from app.semantic_cache import semantic_cache
 from typing import Dict, Any, List
 
 from app.tracker import MarkTracker
+from app.signals import (
+    detect_interest_level, 
+    detect_personality_type, 
+    get_approach_instructions
+)
 
 logger = logging.getLogger(__name__)
 tracker = MarkTracker()
@@ -35,367 +40,51 @@ from app.training_api import compile_training_data
 from app.bant import handle_bant_extraction
 from app.semantic_cache import semantic_cache
 
-async def process_conversation(phone: str, message: str, conversation_id: str = "", message_id: str = "", last_message_ts: float = 0, client_id: str = None):
-    """Main conversation engine logic."""
+async def process_conversation(
+    phone: str,
+    message: str,
+    conversation_id: str = "",
+    message_id: str = "",
+    last_message_ts: float = 0,
+    client_id: str = None,
+):
+    """
+    Main conversation entry point.
+    Delegates to the LangGraph StateGraph (app/graph.py) which handles
+    all orchestration: session loading, stage classification, LLM generation,
+    tool execution, and session persistence.
+    """
     try:
-        # Load Client Config EARLY
-        client_config = None
-        if client_id:
-            client_config = await client_manager.get_client_by_id(client_id)
-            
-        print(f"\n[Conversation] 🚀 Starting process for {phone} (Client: {client_id}): '{message[:50]}...'", flush=True)
-        logger.info("\n[Conversation] 🚀 Starting process for %s: '%s...'", phone, message[:50])
+        from app.graph import workflow
 
-        # Step 4: Get session and lead data
-        session = await redis_client.get_session(phone)
-        if not session:
-            lead = await tracker.get_lead_by_phone(phone)
-            # Try to resolve client_id from lead if not provided
-            if lead and not client_id:
-                client_id = lead.get("client_id")
-                if client_id:
-                    client_config = await client_manager.get_client_by_id(client_id)
-
-            if not lead:
-                lead = await tracker.create_lead(phone=phone, client_id=client_id)
-            
-            session = {
-                "state": ConversationState.OPENING,
-                "history": [],
-                "turn_count": 0,
-                "lead_data": lead or {"phone": phone, "client_id": client_id},
-                "low_content_count": 0
-            }
-        
-        # Ensure lead_data in session has client_id for downstream
-        if client_id and "client_id" not in session["lead_data"]:
-            session["lead_data"]["client_id"] = client_id
-        
-        
-        # V4: 24h Session Auto-Close (with returning lead bypass)
-        last_updated_str = session.get("last_updated")
-        is_cmd = str(message).strip().lower().startswith(("/reset", "#reset"))
-        
-        if not is_cmd and last_updated_str and session.get("state") not in [ConversationState.CONFIRMED, ConversationState.CLOSED]:
-            try:
-                from datetime import timezone as _tz
-                lu_dt = datetime.fromisoformat(last_updated_str.replace("Z", "+00:00"))
-                lu_aware = lu_dt if lu_dt.tzinfo else lu_dt.replace(tzinfo=_tz.utc)
-                idle_seconds = (datetime.now(_tz.utc) - lu_aware).total_seconds()
-                if idle_seconds > 86400:  # 24 hours
-                    logger.info("[Conversation] %s returning after 24h idle — reopening session.", phone)
-                    lead_name = session.get("lead_data", {}).get("first_name", "there")
-                    returning_template = f"Hey {lead_name}, Mark here again from Markeye. Glad you came back — what changed?"
-                    # Send template as single message
-                    await send_message(phone, returning_template)
-                    # Re-initialise session
-                    new_session = {
-                        "state": ConversationState.OPENING,
-                        "history": [{"role": "assistant", "content": returning_template}],
-                        "turn_count": 1,
-                        "lead_data": session.get("lead_data", {}),
-                        "low_content_count": 0,
-                    }
-                    await redis_client.save_session(phone, new_session)
-                    await redis_client.clear_generating(phone)
-                    return
-            except Exception as e:
-                logger.warning("[Conversation] 24h auto-close check failed for %s: %s", phone, e)
-
-        lead_data = session.get("lead_data", {})
-        lead_id = lead_data.get("id")
-
-        # Handle Simulation Data collection if #reset was called
-        if session.get("sim_collecting"):
-            from app.outbound import send_initial_outreach
-            import re
-            logger.info("[Conversation] 🧪 Processing Simulation data from %s: %s", phone, message)
-            
-            # Robust extraction using Regex (Look for labels in any line)
-            name_m = re.search(r'(?:Name|Naam)\s*[–-]\s*([^\n,]+)', message, re.I)
-            comp_m = re.search(r'(?:Company|Business|Agency)(?:\s+name)?\s*[–-]\s*([^\n,]+)', message, re.I)
-            ind_m = re.search(r'(?:Industry|Field|Sector)\s*[–-]\s*([^\n,]+)', message, re.I)
-
-            # Fallback parsing if no labels are found (comma/newline split)
-            if not any([name_m, comp_m, ind_m]):
-                parts = [p.strip() for p in re.split(r'[,\n]', message) if p.strip()]
-                name = parts[0] if len(parts) > 0 else "there"
-                company = parts[1] if len(parts) > 1 else "Horizon Estates"
-                industry = parts[2] if len(parts) > 2 else "Real Estate"
-            else:
-                name = name_m.group(1).strip() if name_m else "there"
-                company = comp_m.group(1).strip() if comp_m else "Horizon Estates"
-                industry = ind_m.group(1).strip() if ind_m else "Real Estate"
-
-            fake_form = {
-                "first_name": name,
-                "company": company,
-                "industry": industry,
-                "role": "Director",
-                "message": f"I want to automate my {industry} agency discovery calls.",
-                "source": "Interactive Reset Simulation"
-            }
-            
-            # Update lead in Supabase with these provided details
-            if lead_id:
-                client = await supabase_client.get_client()
-                await client.table("leads").update({
-                    "first_name": name,
-                    "company": company,
-                    "industry": industry,
-                    "form_message": fake_form["message"]
-                }).eq("id", lead_id).execute()
-
-            # Trigger outreach in background task (Delay bypassed for simulations)
-            print(f"[Conversation] 🧪 Triggering interactive outbound flow for {phone} using {company}", flush=True)
-            asyncio.create_task(send_initial_outreach(name, phone, company, fake_form))
-            
-            # 1. Update session state to Discovery IMMEDIATELY to prevent race condition
-            # 2. Add marker to history so LLM knows an intro is coming/sent
-            session["state"] = ConversationState.DISCOVERY
-            session["sim_collecting"] = False
-            # We don't add to history here because send_initial_outreach handles it, 
-            # but setting state to Discovery stops the "Opening" logic.
-            
-            await redis_client.save_session(phone, session)
-            if lead_id:
-                await tracker.update_state(lead_id, "Discovery")
-            
-            await send_message(phone, "Perfect! I've updated your details. 🚀\n\nStarting outbound demo now... hold tight!")
-            await redis_client.clear_generating(phone)
-            return
-
-        # Step 3: Handle /reset and #reset commands
-        raw_cmd = message.strip().lower()
-        if raw_cmd.startswith("/reset") or raw_cmd.startswith("#reset"):
-            cmd = "#reset" if "#reset" in raw_cmd else "/reset"
-            logger.info("[Conversation] Reset command detected for %s. Clearing session.", phone)
-            
-            # 1. Clear Redis session
-            session = {
-                "state": ConversationState.OPENING,
-                "history": [],
-                "turn_count": 0,
-                "lead_data": lead_data, # Reuse existing lead_data (phone, name etc)
-                "low_content_count": 0,
-                "sim_collecting": (cmd == "#reset") # Flag for interactive simulation
-            }
-            await redis_client.save_session(phone, session)
-            
-            # 2. Sync with Supabase (Critical for live checks)
-            if lead_id:
-                await tracker.update_state(lead_id, "Opening")
-
-            # 3. Handle specific command replies
-            if cmd == "#reset":
-                await send_message(phone, "🚀 #reset: Simulation started! Let's get your details.\n\nType your **Name, Company Name, Industry** (e.g. Nihal, Horizon Estates, Real Estate)")
-            else:
-                await send_message(phone, "I've reset the conversation for you. Please clear the chat on your end and start a new one whenever you're ready.\n\n(Tip: Use **#reset** if you want to start a full website form simulation!)")
-            
-            await redis_client.clear_generating(phone)
-            return
-
-        # ... (Step 4 is moved up, so we'll just skip it below) ...
-
-        # Step 5: Start Typing Indicator (Simulates "Writing...")
-        # We start this BEFORE LLM call so the user knows we are responding
-        print(f"[Conversation] ✍️ Starting typing simulation for {phone}", flush=True)
-        await send_typing_indicator(phone, conversation_id, message_id)
-        if lead_id:
-            await tracker.set_typing_status(lead_id, True)
-
-        # Step 6: Set processing flag
-        await redis_client.set_generating(phone)
-
-        # Step 7: Check if message is low-content spam
-        is_spam = await check_low_content(phone, message, session)
-        if is_spam:
-            return
-
-        # Step 8: Knowledge Base Retrieval (RAG)
-        print(f"[Conversation] 🔍 Searching knowledge base for: {phone}", flush=True)
-        knowledge_context = await retrieve_knowledge(message)
-        if knowledge_context:
-            print(f"[Conversation] 📚 Found knowledge context for {phone}", flush=True)
-
-        # Step 9: LLM Call
-        # 9.0: Semantic Cache Check (V9)
-        # Skip LLM if common intent detected in Discovery/Opening state
-        cached_response = None
-        current_state = session.get("state", ConversationState.OPENING)
-        
-        if current_state in [ConversationState.OPENING, ConversationState.DISCOVERY]:
-            cached_response = await semantic_cache.get_cached(client_id, message)
-            
-        if cached_response:
-            response_text = cached_response
-        else:
-            messages = await build_enhanced_context(session, lead_data, message, knowledge_context, client_config=client_config)
-            response_text = await llm_client.call_llm(
-                messages,
-                model=settings.PRIMARY_MODEL,
-                lead_id=lead_id,
-                conversation_state=session["state"],
-                phone=phone,
-                company=lead_data.get("company", ""),
-                client_config=client_config
-            )
-            # Update cache if applicable
-            if current_state in [ConversationState.OPENING, ConversationState.DISCOVERY]:
-                await semantic_cache.set_cache(client_id, message, response_text)
-
-        print(f"[Conversation] 🤖 Response generated for {phone}", flush=True)
-        
-        if not response_text or "[NO_REPLY]" in response_text.upper():
-            if response_text and "[NO_REPLY]" in response_text.upper():
-                logger.info("[Conversation] LLM generated [NO_REPLY] for %s. Ignoring and doing nothing.", phone)
-            await redis_client.clear_generating(phone)
-            return
-
-        # Step 9.5: Trigger Tag Scanner & Execution (V10)
-        # Scan for: [SEND_BOOKING_POLL], [SEND_CALENDLY], [SEND_PRICING], [ESCALATE]
-        trigger_patterns = {
-            "SEND_BOOKING_POLL": r'\[SEND_BOOKING_POLL\]',
-            "SEND_CALENDLY": r'\[SEND_CALENDLY\]',
-            "SEND_PRICING": r'\[SEND_PRICING\]',
-            "ESCALATE": r'\[ESCALATE\]'
+        initial_state = {
+            "phone": phone,
+            "message": message,
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+            "last_message_ts": last_message_ts,
+            "client_id": client_id,
+            # Populated by load_context node:
+            "session": {},
+            "lead_data": {},
+            "lead_id": None,
+            "client_config": None,
+            "knowledge_context": "",
+            "response_text": "",
+            "tool_calls": [],
+            "should_exit": False,
+            "exit_reason": "",
         }
-        
-        fired_triggers = []
-        for tag, pattern in trigger_patterns.items():
-            if re.search(pattern, response_text, re.I):
-                fired_triggers.append(tag)
-        
-        # Clean response (Strip ALL tags)
-        response_text = re.sub(r'\[[A-Z\s_]+:?.*?\]', '', response_text).strip()
-        
-        if fired_triggers:
-            logger.info("[Conversation] 🎯 Fired triggers for %s: %s", phone, fired_triggers)
-            # Execute actions in background so they don't delay the main reply
-            for trigger in fired_triggers:
-                if trigger == "SEND_BOOKING_POLL":
-                    asyncio.create_task(send_poll(
-                        to=phone, 
-                        question="Want to book a quick 15-min discovery call? Pick what works:", 
-                        options=["Today", "Tomorrow", "This Week", "Not Yet"]
-                    ))
-                elif trigger == "SEND_CALENDLY":
-                    # Baileys handler will catch the URL and add preview automatically
-                    pass 
-                elif trigger == "SEND_PRICING":
-                    asyncio.create_task(send_media(
-                        to=phone, 
-                        media_type="document", 
-                        url=settings.PRICING_PDF_URL, 
-                        caption="Markeye Pricing Overview"
-                    ))
-                elif trigger == "ESCALATE":
-                    if settings.SALES_PHONE_NUMBER:
-                        asyncio.create_task(forward_message(
-                            to=phone, 
-                            original_msg_id=message_id, 
-                            forward_to=settings.SALES_PHONE_NUMBER
-                        ))
 
-        # Step 9.6: Interrupt Check — did new messages arrive during LLM call?
-        new_messages_str = await redis_client.get_and_clear_buffer(phone)
-        if new_messages_str:
-            logger.info("[Conversation] New messages arrived during processing for %s, re-generating", phone)
-            combined = message + "\n" + new_messages_str
-            await redis_client.clear_generating(phone)
-            # Re-process with combined input
-            return await process_conversation(phone, combined, conversation_id, message_id, client_id=client_id)
-
-        # Step 10: Calendly Resend Logic (Fix 3)
-        response_text = await check_and_send_calendly(phone, response_text, session, client_config=client_config)
-
-        # Step 11: Send natural multi-bubble response
-        if response_text:
-            print(f"[Conversation] 📤 Splitting and sending multi-bubble response to {phone}", flush=True)
-            chunks = chunk_message(response_text)
-            
-            # Use the existing utility that handles delays and typing indicators
-            await send_chunked_messages(
-                to=phone, 
-                chunks=chunks, 
-                incoming_text=message, 
-                last_message_ts=last_message_ts, 
-                message_id=message_id
-            )
-            
-            if lead_id:
-                await tracker.set_typing_status(lead_id, False)
-
-        # Step 12: Update session history and turn count
-        session["history"].append({"role": "user", "content": message})
-        session["history"].append({"role": "assistant", "content": response_text})
-        session["history"] = session["history"][-50:]
-        session["turn_count"] += 1
-        session["last_updated"] = datetime.now(timezone.utc).isoformat()
-
-        # Step 13: Tracking outbound
-        # Fetch metadata from Redis cached in llm.py
-        llm_metadata = {}
-        try:
-            cached = await redis_client.redis.get(f"last_llm_usage:{phone}")
-            if cached:
-                llm_metadata = json.loads(cached)
-                await redis_client.redis.delete(f"last_llm_usage:{phone}")
-        except:
-            pass
-            
-        await tracker.log_outbound(lead_id, response_text, client_id=client_id, metadata=llm_metadata)
-
-        # Step 14: Check for state transition
-        new_state = check_transition(session["state"], session, client_config=client_config)
-        
-        # Detect Exit Phrases for CLOSED state (Issue 7 & 8)
-        exit_phrases = [
-            "no worries, you know where to find us",
-            "come back when you want to chat properly",
-            "all the best",
-            "leave it there"
-        ]
-        response_lower = response_text.lower()
-        if any(phrase in response_lower for phrase in exit_phrases):
-            logger.info("[Conversation] Exit phrase detected, closing conversation for %s", phone)
-            new_state = ConversationState.CLOSED
-
-        if new_state and new_state != session["state"]:
-            logger.info("[Conversation] Transitioning state: %s -> %s", session['state'], new_state)
-            session["state"] = new_state
-            
-            state_map = {
-                ConversationState.OPENING: "Opening",
-                ConversationState.DISCOVERY: "Discovery",
-                ConversationState.QUALIFICATION: "Qualification",
-                ConversationState.BOOKING: "Booking Push",
-                ConversationState.ESCALATION: "Escalation",
-                ConversationState.CONFIRMED: "Confirmed",
-                ConversationState.WAITING: "Waiting",
-                ConversationState.CLOSED: "Closed"
-            }
-            await tracker.update_state(lead_id, state_map.get(new_state, "Opening"))
-
-        # Step 15: Cleanup and background tasks
-        await redis_client.save_session(phone, session)
-        await redis_client.clear_generating(phone)
-        
-        # Phase 3: Auto-scoring on termination
-        if new_state == ConversationState.CLOSED:
-            # Determine outcome based on context if not explicit
-            outcome = "exit_clean"
-            if any(phrase in response_lower for phrase in ["no worries", "all the best"]):
-                outcome = "exit_clean"
-            # In a real scenario, we'd check if they booked (CONFIRMED state)
-            asyncio.create_task(on_conversation_end(phone, outcome, session, lead_id))
-
-        # Background Smart Extraction (V9)
-        asyncio.create_task(handle_bant_extraction(phone, message, session["history"], client_config=client_config))
+        print(f"\n[Conversation] 🚀 Invoking graph for {phone}: '{message[:50]}...'", flush=True)
+        await workflow.ainvoke(initial_state)
 
     except Exception as e:
         logger.critical("[Conversation] 🚨 CRITICAL ERROR processing %s: %s", phone, e, exc_info=True)
+        from app.redis_client import redis_client
         await redis_client.clear_generating(phone)
+
+
 
 
 async def on_conversation_end(phone: str, outcome: str, session: dict, lead_id: str = None):

@@ -40,14 +40,25 @@ async def startup():
     
     # Start Baileys Bridge for direct WhatsApp integration
     from app.baileys_bridge import baileys_bridge
+    from app.client_manager import client_manager
     import asyncio
     asyncio.create_task(baileys_bridge.start())
     logger.info("OK: Baileys Bridge listener launched")
+    
+    # Auto-initialize all clients (Module 6)
+    asyncio.create_task(client_manager.init_all_clients())
+    logger.info("OK: Multi-session client initialization triggered")
 
-# Allow CORS for the frontend dashboard
+@app.on_event("shutdown")
+async def shutdown():
+    from app.baileys_bridge import baileys_bridge
+    logger.info("Stopping Baileys Bridge...")
+    await baileys_bridge.stop()
+
+# Enable CORS for local development & production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins (standard for development/admin dashboard)
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -55,6 +66,14 @@ app.add_middleware(
 
 from app.middleware import TelemetryMiddleware
 app.add_middleware(TelemetryMiddleware)
+
+from fastapi.staticfiles import StaticFiles
+# Try to serve the premium dashboard if built, fallback to simple dashboard
+dist_path = "../after5-agent-front/dist"
+if os.path.exists(dist_path):
+    app.mount("/admin", StaticFiles(directory=dist_path, html=True), name="admin")
+else:
+    app.mount("/admin", StaticFiles(directory="dashboard", html=True), name="admin")
 
 app.include_router(webhook_router)
 app.include_router(outbound_router)

@@ -58,7 +58,11 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 logger.error(f"[Webhook Status Error] {recipient} failed with errors: {errors}")
             return {"status": "ignored"}
         
-        message = value["messages"][0]
+        messages = value.get("messages", [])
+        if not messages:
+            return {"status": "ignored"}
+        
+        message = messages[0]
         contact = value.get("contacts", [{}])[0]
         metadata = value.get("metadata", {})
         
@@ -116,22 +120,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     if diff < 86400:  # Still within 24h cooldown - ignore
                         logger.info(f"[Webhook] {sender_phone} is CLOSED within 24h. Ignoring message.")
                         return {"status": "ignored", "reason": "closed_state"}
-                    else:
-                        # 24h+ since close - re-open as returning lead
-                        logger.info(f"[Webhook] {sender_phone} returning after 24h+ - reopening session.")
-                        lead_name = session.get("lead_data", {}).get("first_name", "there")
-                        returning_template = f"Hey {lead_name}, Mark here again from Markeye. Glad you came back - what changed?"
-                        # Send template as single message
-                        await send_message(sender_phone, returning_template)
-                        # Re-initialise session
-                        new_session = {
-                            "state": ConversationState.OPENING,
-                            "history": [{"role": "assistant", "content": returning_template}],
-                            "turn_count": 1,
-                            "lead_data": session.get("lead_data", {}),
-                        }
-                        await redis_client.save_session(sender_phone, new_session)
-                        return {"status": "reopened"}
+                    # If > 24h, let it pass through to conversation engine to handle returning lead
                 except Exception as e:
                     logger.warning(f"[Webhook] CLOSED cooldown check failed: {e}")
         
@@ -187,26 +176,18 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         logger.info(f"Message from {sender_phone} ({sender_name}): {message_text[:80]}...")
         
         # === BUFFER THE MESSAGE — DON'T PROCESS YET ===
-        batch_id = await redis_client.buffer_message(sender_phone, message_text)
+        batch_id, is_first = await redis_client.buffer_message(sender_phone, message_text)
         # Store last message_id and sender_name for processing
         await redis_client.redis.set(f"last_msg_id:{sender_phone}", message_id, ex=300)
         await redis_client.redis.set(f"last_name:{sender_phone}", sender_name, ex=300)
 
-        # 5. Instant Blue Tick & Typing (REMOVED: Handled by advanced timing sequence)
-        # background_tasks.add_task(mark_as_read, "", message_id)
-        # background_tasks.add_task(send_typing_indicator, sender_phone, message_id)
-        
         # Fire delayed processor (3s rolling timer)
         client_id = client_config.get("id") if client_config else None
         background_tasks.add_task(delayed_buffer_process, sender_phone, batch_id, message_ts, client_id)
         
         # Fire hard-max safety check (8s fixed timer from first message in batch)
         # We only start this if it's the first message of a potentially new batch
-        if await redis_client.redis.get(f"buffer_first:{sender_phone}"):
-            # Already running for this batch
-            pass
-        else:
-            # This shouldn't happen because buffer_message sets it, but for safety:
+        if is_first:
             background_tasks.add_task(hard_max_check, sender_phone, message_ts, client_id)
         
         # Tracker Log in background
