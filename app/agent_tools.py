@@ -195,7 +195,7 @@ async def execute_tool_call(
     client_config: Optional[dict] = None,
 ) -> None:
     """Dispatch tool execution by name."""
-    from app.messaging import send_poll, send_media, forward_message, send_typing_indicator
+    from app.message_router import send_poll, send_media, forward_message, send_typing_indicator
     from app.config import settings
     from app.redis_client import redis_client
 
@@ -204,11 +204,7 @@ async def execute_tool_call(
     client_id = client_config.get("id") if client_config else None
 
     if tool_name == "send_booking_poll":
-        await send_poll(
-            to=phone,
-            question="Want to book a quick 15-min discovery call? Pick what works:",
-            options=["Today", "Tomorrow", "This Week", "Not Yet"],
-            client_id=client_id
+            client_config=client_config
         )
 
     elif tool_name == "send_booking_link":
@@ -217,22 +213,13 @@ async def execute_tool_call(
 
     elif tool_name == "send_pricing_doc":
         pricing_url = (client_config.get("settings") or {}).get("pricing_url") or settings.PRICING_PDF_URL
-        await send_media(
-            to=phone,
-            media_type="document",
-            url=pricing_url,
-            caption="Markeye Pricing Overview",
-            client_id=client_id
+            client_config=client_config
         )
 
     elif tool_name == "escalate_to_human":
         sales_number = client_config.get("sales_contact") or settings.SALES_PHONE_NUMBER
         if sales_number:
-            await forward_message(
-                to=phone,
-                original_msg_id=message_id,
-                forward_to=sales_number,
-                client_id=client_id
+                client_config=client_config
             )
 
     elif tool_name == "close_conversation":

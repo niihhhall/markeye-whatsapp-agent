@@ -11,7 +11,7 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DO_HOST }}
-          username: root
+          username: deploy
           key: ${{ secrets.DO_SSH_KEY }}
           script: |
             # Ensure directory exists and clone if necessary

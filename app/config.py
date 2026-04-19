@@ -9,14 +9,12 @@ class Settings(BaseSettings):
     WHATSAPP_BUSINESS_ACCOUNT_ID: str = ""
     WHATSAPP_ACCESS_TOKEN: str = ""
     WHATSAPP_VERIFY_TOKEN: str = "markeye_verify_token"
+    WHATSAPP_APP_SECRET: str = ""  # Meta App Secret for HMAC webhook verification
     WHATSAPP_API_VERSION: str = "v21.0"
     MESSAGING_PROVIDER: str = "whatsapp_cloud"
 
-    # OpenAI
+    # OpenAI (Fix 9: Only used for Knowledge Base Embeddings)
     OPENAI_API_KEY: str = ""
-    PRIMARY_MODEL: str = "gpt-4o"
-    FALLBACK_MODEL: str = "gpt-4o-mini"
-    BANT_MODEL: str = "gpt-4o-mini"
 
     # Groq (Primary)
     GROQ_API_KEY: str = ""
@@ -46,8 +44,17 @@ class Settings(BaseSettings):
     # Sentry
     SENTRY_DSN: str = ""
 
-    # Cal.com
+    # Booking Link (Fix 12: Resolving Cal.com vs legacy naming)
     CALCOM_LINK: str = "https://cal.com/markeye/free-discovery-call"
+    CALENDLY_LINK: str = ""  # Deprecated alias — kept for backward compat only
+
+    @property
+    def booking_link(self) -> str:
+        """Returns the active booking link. Prefers Cal.com over legacy Calendly."""
+        return self.CALCOM_LINK or self.CALENDLY_LINK
+
+    # Security (Fix 1)
+    ALLOWED_ORIGINS: str = "http://localhost:3000"  # comma-separated list in .env
 
     # App
     DEBUG: bool = False
@@ -82,8 +89,10 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings():
+    import logging
+    logger = logging.getLogger(__name__)
     s = Settings()
-    print(f"[Config] Active Messaging Provider: {s.MESSAGING_PROVIDER}", flush=True)
+    logger.info(f"[Config] Active Messaging Provider: {s.MESSAGING_PROVIDER}")
     return s
 
 settings = get_settings()

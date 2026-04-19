@@ -5,9 +5,12 @@ so the Markeye dashboard can display it in real time.
 
 import asyncio
 import os
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 from app.supabase_client import supabase_client
+
+logger = logging.getLogger(__name__)
 
 class MarkTracker:
     # ─── LEADS ───────────────────────────────────────────────
@@ -50,11 +53,11 @@ class MarkTracker:
             if result.data:
                 lead = result.data[0]
                 await self._init_conversation_state(lead["id"])
-                print(f"[Mark Tracker] OK: Lead created: {first_name} {last_name} ({phone})")
+                logger.info(f"[Mark Tracker] OK: Lead created: {first_name} {last_name} ({phone})")
                 return lead
 
         except Exception as e:
-            print(f"[Markeye Tracker Error] create_lead: {e}")
+            logger.error(f"[Markeye Tracker Error] create_lead: {e}")
         return {}
 
     async def get_lead_by_phone(self, phone: str) -> Optional[dict]:
@@ -68,11 +71,11 @@ class MarkTracker:
                 end = asyncio.get_event_loop().time()
                 
                 if attempt > 0:
-                    print(f"[Mark Tracker] INFO: Retry {attempt} success in {end-start:.2f}s", flush=True)
+                    logger.info(f"[Mark Tracker] INFO: Retry {attempt} success in {end-start:.2f}s")
                 
                 return result.data[0] if result.data else None
             except Exception as e:
-                print(f"[Markeye Tracker Error] get_lead_by_phone (attempt {attempt+1}): {e}", flush=True)
+                logger.error(f"[Markeye Tracker Error] get_lead_by_phone (attempt {attempt+1}): {e}")
                 if attempt < max_retries:
                     await asyncio.sleep(1) # Small pause before retry
                 else:
@@ -88,7 +91,7 @@ class MarkTracker:
             result = await query.order("created_at", desc=True).execute()
             return result.data if result.data else []
         except Exception as e:
-            print(f"[Markeye Tracker Error] get_all_leads: {e}")
+            logger.error(f"[Markeye Tracker Error] get_all_leads: {e}")
             return []
 
     async def update_signal_score(self, lead_id: str, score: int) -> None:
@@ -149,7 +152,7 @@ class MarkTracker:
             await self._update_last_active(lead_id)
             return result.data[0] if result.data else {}
         except Exception as e:
-            print(f"[Markeye Tracker Error] log_inbound: {e}")
+            logger.error(f"[Markeye Tracker Error] log_inbound: {e}")
             return {}
 
     async def log_outbound(self, lead_id: str, content: str, client_id: Optional[str] = None, metadata: Optional[dict] = None) -> dict:
@@ -206,7 +209,7 @@ class MarkTracker:
             client = await supabase_client.get_client()
             await client.table("conversation_state").upsert(payload, on_conflict="lead_id").execute()
         except Exception as e:
-            print(f"[Markeye Tracker Error] update_state: {e}")
+            logger.error(f"[Markeye Tracker Error] update_state: {e}")
 
     async def set_typing_status(self, lead_id: str, is_typing: bool) -> None:
         """Updates the is_typing field in conversation_state."""
@@ -240,10 +243,9 @@ class MarkTracker:
                 "scheduled_at": scheduled_at,
                 "status": "confirmed",
             }).execute()
-            # Auto-update lead outcome and conversation state
             await self.update_outcome(lead_id, "Meeting Booked")
             await self.update_state(lead_id, "Confirmed")
-            print(f"[Mark Tracker] OK: Booking confirmed for lead {lead_id}")
+            logger.info(f"[Mark Tracker] OK: Booking confirmed for lead {lead_id}")
             return result.data[0] if result.data else {}
         except Exception as e:
             print(f"[Markeye Tracker Error] confirm_booking: {e}")

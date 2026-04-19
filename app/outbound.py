@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Body, BackgroundTasks
 from app.models import LeadCreate
 from app.supabase_client import supabase_client
-from app.whatsapp_client import (
+from app.message_router import (
     send_message, 
     send_typing_indicator, 
     send_chunked_messages,
@@ -87,7 +87,8 @@ async def send_initial_outreach(name_raw: str, phone_raw: str, company_raw: str,
             logger.info("[Outreach] 🚀 Attempting template outreach for %s (%s)", name, sender_phone)
             template_res = await send_template_message(
                 sender_phone, 
-                template_name, 
+                client_config=client_config,
+                template_name=template_name, 
                 language_code="en_GB", 
                 components=components
             )
@@ -123,14 +124,14 @@ async def send_initial_outreach(name_raw: str, phone_raw: str, company_raw: str,
             await tracker.log_outbound(lead_id, first_message_content, client_id=client_id)
         else:
             if not is_sim:
-                logger.warning("[Outreach] ⚠️ Template send failed. Falling back to raw text.")
+                logger.warning("[Outreach] ⚠️ Template send failed or Baileys selected. Falling back to raw text.")
             
             # 5. Fallback: Human-like delivery — bypass chunking for template
             chunks = chunk_message(first_message_content, is_template=True)
             
             # Note: typing indicator and delays are handled INSIDE send_chunked_messages.
             # This is where the long delays (>30s) happen.
-            await send_chunked_messages(sender_phone, chunks, interruptible=False)
+            await send_chunked_messages(sender_phone, chunks, client_config=client_config, interruptible=False)
             
             # Log to Supabase
             await tracker.log_outbound(lead_id, first_message_content, client_id=client_id)

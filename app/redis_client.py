@@ -1,8 +1,11 @@
 import json
 import time
+import logging
 from redis.asyncio import from_url, Redis
 from app.config import settings
 from typing import Optional, List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 class RedisClient:
     def __init__(self):
@@ -16,7 +19,7 @@ class RedisClient:
         try:
             return await self.redis.ping()
         except Exception as e:
-            print(f"[Redis] ERROR: Ping failed: {e}", flush=True)
+            logger.error(f"[Redis] ERROR: Ping failed: {e}")
             return False
 
     async def get_session(self, phone: str) -> Optional[Dict[str, Any]]:
@@ -26,16 +29,16 @@ class RedisClient:
                 return json.loads(data)
             return None
         except Exception as e:
-            print(f"[Redis] ❌ get_session failed for {phone}: {e}", flush=True)
+            logger.error(f"[Redis] get_session failed for {phone}: {e}")
             return None
 
     async def save_session(self, phone: str, session: Dict[str, Any]):
         try:
             # Persistent memory: 7 days TTL
             await self.redis.set(f"session:{phone}", json.dumps(session), ex=604800)
-            print(f"[Redis] OK: Session saved for {phone}", flush=True)
+            logger.info(f"[Redis] OK: Session saved for {phone}")
         except Exception as e:
-            print(f"[Redis] ERROR: save_session failed for {phone}: {e}", flush=True)
+            logger.error(f"[Redis] ERROR: save_session failed for {phone}: {e}")
 
     async def add_to_history(self, phone: str, role: str, content: str):
         try:
@@ -53,7 +56,7 @@ class RedisClient:
             session["history"] = session["history"][-100:]
             await self.save_session(phone, session)
         except Exception as e:
-            print(f"[Redis] ❌ add_to_history failed for {phone}: {e}", flush=True)
+            logger.error(f"[Redis] add_to_history failed for {phone}: {e}")
 
     async def check_dedup(self, message_sid: str) -> bool:
         """Returns True if seen, False if new. Stores with 5min TTL."""
@@ -65,7 +68,7 @@ class RedisClient:
             await self.redis.set(f"dedup:{message_sid}", "1", ex=86400)
             return False
         except Exception as e:
-            print(f"[Redis] ❌ check_dedup failed: {e}", flush=True)
+            logger.error(f"[Redis] check_dedup failed: {e}")
             return False
 
     async def buffer_message(self, phone: str, message: str) -> tuple[str, bool]:
@@ -87,10 +90,10 @@ class RedisClient:
             new_batch_id = str(uuid.uuid4())
             await self.redis.set(batch_key, new_batch_id, ex=60)
                 
-            print(f"[Redis] ✅ Buffered message for {phone}, batch {new_batch_id}", flush=True)
+            logger.info(f"[Redis] Buffered message for {phone}, batch {new_batch_id}")
             return new_batch_id, is_first
         except Exception as e:
-            print(f"[Redis] ❌ buffer_message failed for {phone}: {e}", flush=True)
+            logger.error(f"[Redis] buffer_message failed for {phone}: {e}")
             return "error_batch", False
 
     async def get_and_clear_buffer(self, phone: str) -> str:
@@ -109,7 +112,7 @@ class RedisClient:
             # Using decode_responses=True in from_url, so messages are already strings
             return "\n".join(messages)
         except Exception as e:
-            print(f"[Redis] ❌ get_and_clear_buffer failed for {phone}: {e}", flush=True)
+            logger.error(f"[Redis] get_and_clear_buffer failed for {phone}: {e}")
             return ""
 
     async def is_batch_current(self, phone: str, batch_id: str) -> bool:
@@ -120,7 +123,7 @@ class RedisClient:
                 return False
             return current == batch_id
         except Exception as e:
-            print(f"[Redis] ❌ is_batch_current failed: {e}", flush=True)
+            logger.error(f"[Redis] is_batch_current failed: {e}")
             return False
 
     async def has_hit_hard_max(self, phone: str) -> bool:
@@ -131,7 +134,7 @@ class RedisClient:
                 return False
             return (time.time() - float(first_ts)) >= settings.INPUT_BUFFER_MAX_SECONDS
         except Exception as e:
-            print(f"[Redis] ❌ has_hit_hard_max failed: {e}", flush=True)
+            logger.error(f"[Redis] has_hit_hard_max failed: {e}")
             return False
 
     async def set_generating(self, phone: str):
@@ -139,20 +142,14 @@ class RedisClient:
             await self.redis.set(f"generating:{phone}", "1", ex=120)
             await self.redis.set(f"generating_ts:{phone}", str(time.time()), ex=120)
         except Exception as e:
-            print(f"[Redis] ❌ set_generating failed: {e}", flush=True)
-
-    async def clear_generating(self, phone: str):
-        try:
-            await self.redis.delete(f"generating:{phone}", f"generating_ts:{phone}")
-        except Exception as e:
-            print(f"[Redis] ❌ clear_generating failed: {e}", flush=True)
+            logger.error(f"[Redis] set/clear_generating failed: {e}")
 
     async def is_generating(self, phone: str) -> bool:
         try:
             exists = await self.redis.exists(f"generating:{phone}")
             return exists > 0
         except Exception as e:
-            print(f"[Redis] ❌ is_generating failed: {e}", flush=True)
+            logger.error(f"[Redis] is_generating failed: {e}")
             return False
 
     async def has_new_messages(self, phone: str) -> bool:
@@ -161,7 +158,7 @@ class RedisClient:
             length = await self.redis.llen(f"buffer:{phone}")
             return length > 0
         except Exception as e:
-            print(f"[Redis] ❌ has_new_messages failed: {e}", flush=True)
+            logger.error(f"[Redis] {{name}} failed: {e}")
             return False
 
     async def lrange(self, key: str, start: int, stop: int) -> List[str]:
@@ -169,7 +166,7 @@ class RedisClient:
         try:
             return await self.redis.lrange(key, start, stop)
         except Exception as e:
-            print(f"[Redis] ❌ lrange failed for {key}: {e}", flush=True)
+            logger.error(f"[Redis] lrange failed: {e}")
             return []
 
     async def has_sent_calendly(self, phone: str) -> bool:
@@ -186,17 +183,17 @@ class RedisClient:
             
             ts = await self.redis.get(ts_key)
             if ts and (time.time() - float(ts)) > 120:
-                print(f"[Redis] WARN: Stale generation flag for {phone}, clearing", flush=True)
+                logger.warning(f"[Redis] Stale generation flag for {phone}, clearing")
                 await self.redis.delete(gen_key, ts_key)
         except Exception as e:
-            print(f"[Redis] ERROR: check_and_clear_stale_generation failed: {e}", flush=True)
+            logger.error(f"[Redis] check_and_clear_stale_generation failed: {e}")
 
     async def get(self, key: str) -> Optional[str]:
         """Generic get for RAG context."""
         try:
             return await self.redis.get(key)
         except Exception as e:
-            print(f"[Redis] ❌ get failed for {key}: {e}", flush=True)
+            logger.error(f"[Redis] get failed for {key}: {e}")
             return None
 
     async def set(self, key: str, value: str, ex: int = None):
@@ -204,7 +201,7 @@ class RedisClient:
         try:
             await self.redis.set(key, value, ex=ex)
         except Exception as e:
-            print(f"[Redis] ❌ set failed for {key}: {e}", flush=True)
+            logger.error(f"[Redis] set failed for {key}: {e}")
 
     # Telemetry Helpers
     async def inc_metric(self, name: str, amount: int = 1):

@@ -110,9 +110,11 @@ def check_transition(current_state: ConversationState, session_data: Dict[str, A
     threshold = 7
     if client_config and client_config.get("bant_criteria"):
         criteria = client_config["bant_criteria"]
-        threshold = criteria.get("overall_threshold_mark", 7)
-        if not threshold and criteria.get("overall_threshold"):
-            pass
+        threshold = (
+            criteria.get("overall_threshold_mark")
+            or criteria.get("overall_threshold")
+            or 7
+        )
 
     if turn_count < rule["min_turns"]:
         return None

@@ -31,17 +31,21 @@ from app.redis_client import redis_client
 logger = logging.getLogger(__name__)
 logger.info("Application starting...")
 
-app = FastAPI(title="Markeye WhatsApp AI Agent — Mark", version="1.0.0")
+from contextlib import asynccontextmanager
 
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # STARTUP
     logger.info("Running startup tasks...")
+    import asyncio
+    from app.conversation_library import load_conversation_library
+    from app.redis_client import redis_client
+    from app.baileys_bridge import baileys_bridge
+    from app.client_manager import client_manager
+
     await load_conversation_library(redis_client.redis)
     
     # Start Baileys Bridge for direct WhatsApp integration
-    from app.baileys_bridge import baileys_bridge
-    from app.client_manager import client_manager
-    import asyncio
     asyncio.create_task(baileys_bridge.start())
     logger.info("OK: Baileys Bridge listener launched")
     
@@ -49,18 +53,22 @@ async def startup():
     asyncio.create_task(client_manager.init_all_clients())
     logger.info("OK: Multi-session client initialization triggered")
 
-@app.on_event("shutdown")
-async def shutdown():
+    yield
+
+    # SHUTDOWN
     from app.baileys_bridge import baileys_bridge
     logger.info("Stopping Baileys Bridge...")
     await baileys_bridge.stop()
 
-# Enable CORS for local development & production
+app = FastAPI(title="Markeye WhatsApp AI Agent — Mark", version="2.0.0", lifespan=lifespan)
+
+# Enable CORS for local development & production (Fix 1)
+origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",")]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=origins, 
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 

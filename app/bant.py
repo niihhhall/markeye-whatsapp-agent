@@ -1,9 +1,12 @@
 import json
 import os
+import logging
 from typing import List, Dict, Any
 from app.config import settings
 from app.llm import llm_client
 from app.redis_client import redis_client
+
+logger = logging.getLogger(__name__)
 
 from app.tracker import MarkTracker
 
@@ -71,7 +74,7 @@ async def extract_bant(phone: str, history: List[Dict[str, str]], client_config:
 
         response_text = await llm_client.call_llm(
             messages, 
-            model=settings.BANT_MODEL,
+            model=settings.GEMINI_MODEL,
             lead_id=lead_id,
             conversation_state=session["state"],
             phone=phone,
@@ -112,7 +115,7 @@ async def extract_bant(phone: str, history: List[Dict[str, str]], client_config:
         await tracker.update_temperature(lead_id, temp)
             
     except Exception as e:
-        print(f"Error extracting BANT for {phone}: {e}")
+        logger.error(f"Error extracting BANT for {phone}: {e}")
 
 async def handle_bant_extraction(phone: str, message: str, history: List[Dict[str, str]], client_config: dict = None):
     """Wrapper to handle the extraction logic and message counting."""
@@ -124,12 +127,12 @@ async def handle_bant_extraction(phone: str, message: str, history: List[Dict[st
         current_state = session.get("state", "opening")
         
         if should_extract_bant(message, count, current_state):
-            print(f"[BANT] 🧠 Triggering extraction for {phone} (Count: {count})")
+            logger.info(f"[BANT] Triggering extraction for {phone} (Count: {count})")
             await extract_bant(phone, history, client_config)
             await redis_client.redis.set(count_key, "0") # Reset
         else:
             await redis_client.redis.set(count_key, str(count))
-            print(f"[BANT] ⏩ Skipping extraction for {phone} (Count: {count})")
+            logger.info(f"[BANT] Skipping extraction for {phone} (Count: {count})")
             
     except Exception as e:
-        print(f"Error in handle_bant_extraction: {e}")
+        logger.error(f"Error in handle_bant_extraction: {e}")

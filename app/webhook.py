@@ -1,17 +1,28 @@
+import hmac
+import hashlib
 import asyncio
 import logging
 import random
 from typing import Optional
-from fastapi import APIRouter, Request, Response, BackgroundTasks
+from fastapi import APIRouter, Request, Response, BackgroundTasks, HTTPException
 from app.config import settings
 from app.redis_client import redis_client
-from app.messaging import mark_as_read, send_message, send_chunked_messages, send_typing_indicator
+from app.message_router import mark_as_read, send_message, send_chunked_messages, send_typing_indicator
 from app.models import ConversationState
 from app.stt import process_voice_note_from_media_id
 from app.client_manager import client_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+def verify_whatsapp_signature(body: bytes, header: str, secret: str) -> bool:
+    """Verify that the webhook request came from Meta using HMAC-SHA256."""
+    if not header or not header.startswith("sha256="):
+        return False
+    expected = "sha256=" + hmac.new(
+        secret.encode("utf-8"), body, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, header)
 
 MAX_INTERRUPT_RETRIES = 2
 
@@ -36,6 +47,14 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
     Return 200 instantly — process async.
     """
     try:
+        # 1. Verify Signature (Fix 3)
+        body_bytes = await request.body()
+        signature = request.headers.get("X-Hub-Signature-256", "")
+        if settings.WHATSAPP_APP_SECRET:
+            if not verify_whatsapp_signature(body_bytes, signature, settings.WHATSAPP_APP_SECRET):
+                logger.warning(f"Invalid webhook signature from {request.client.host}")
+                raise HTTPException(status_code=403, detail="Invalid webhook signature")
+
         payload = await request.json()
         
         # Ignore non-WhatsApp events
@@ -85,6 +104,15 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         # Convert to internal phone format
         sender_phone = f"whatsapp:+{sender_wa_id}"    # "whatsapp:+447700900000"
         
+        # 0. Rate limit: max 3 triggers per phone per 10-second window (Fix 6)
+        rate_key = f"ratelimit:{sender_phone}"
+        count = await redis_client.redis.incr(rate_key)
+        if count == 1:
+            await redis_client.redis.expire(rate_key, 10)
+        if count > 3:
+            logger.warning("[Webhook] Rate limit hit for %s — dropping message", sender_phone)
+            return {"status": "rate_limited"}
+
         # 1. Dedup Check (Safeguard 2)
         dedup_key = f"dedup:{message_id}"
         if await redis_client.redis.get(dedup_key):

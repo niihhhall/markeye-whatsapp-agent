@@ -4,6 +4,9 @@ from app.redis_client import redis_client
 
 logger = logging.getLogger(__name__)
 
+# ⚠️ WARNING: ONLY cache global/brand info (pricing, FAQs). 
+# NEVER cache results for user-specific questions (PII leak risk).
+
 class SemanticCache:
     COMMON_INTENTS = {
         "pricing": ["price", "cost", "how much", "rates", "fee", 

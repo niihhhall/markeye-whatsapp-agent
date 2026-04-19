@@ -159,7 +159,7 @@ class LLMClient:
             return content
 
         except Exception as e:
-            print(f"[LLM Client Error] Router failed all providers: {e}")
+            logger.error(f"[LLM Client Error] Router failed all providers: {e}")
             raise e
 
     async def build_context(
@@ -268,7 +268,7 @@ class LLMClient:
             if example:
                 example_context = f"\n═══ REFERENCE CONVERSATION (LEARN FROM THIS TONE) ═══\n{example}\n"
         except Exception as e:
-            print(f"[LLM] ❌ Error getting relevant example: {e}", flush=True)
+            logger.error(f"[LLM] Error getting relevant example: {e}")
 
         # Combine Core + Addons (Industry, Objections, Examples)
         system_prompt = core_prompt
@@ -321,7 +321,8 @@ class LLMClient:
             "{{lead_company_summary}}": lead_data.get("form_message", ""),
             "{{current_state}}": current_state_val,
             "{{scoring_status}}": scoring_status,
-            "{{calendly_link}}": client_config.get("calendly_link") if client_config else settings.CALENDLY_LINK,
+            "{{calendly_link}}": (client_config.get("calcom_link") or client_config.get("calendly_link")) if client_config else settings.booking_link,
+            "{{booking_link}}": (client_config.get("calcom_link") or client_config.get("calendly_link")) if client_config else settings.booking_link,
             "{{business_name}}": client_config.get("business_name") if client_config else "Markeye",
             "{{bant_scores}}": str(session.get("bant_scores", {})),
             "{{current_datetime}}": current_datetime,

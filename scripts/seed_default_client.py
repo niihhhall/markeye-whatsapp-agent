@@ -31,7 +31,11 @@ async def seed_default_client():
                 "What is your biggest bottleneck right now?"
             ],
             "calendly_link": settings.CALENDLY_LINK,
-            "greeting_message": "Hey! Thanks for reaching out. I'm Mark from Markeye. Quick question ??? what made you fill out the form today?",
+            "greeting_message": "Hey! Thanks for reaching out. I'm Mark from Markeye. Quick question — what made you fill out the form today?",
+            "messaging_provider": "whatsapp_cloud",
+            "outreach_template_name": "markeye_outreach",
+            "whatsapp_phone_number_id": settings.WHATSAPP_PHONE_NUMBER_ID,
+            "whatsapp_access_token": settings.WHATSAPP_ACCESS_TOKEN,
             "active": True
         }
         

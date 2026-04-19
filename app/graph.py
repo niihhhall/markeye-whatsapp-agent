@@ -64,7 +64,7 @@ async def load_context(state: GraphState) -> dict:
     from app.redis_client import redis_client
     from app.tracker import MarkTracker
     from app.client_manager import client_manager
-    from app.messaging import send_message
+    from app.message_router import send_message
 
     phone = state["phone"]
     message = state["message"]
@@ -120,7 +120,7 @@ async def load_context(state: GraphState) -> dict:
                     f"Hey {lead_name}, Mark here again from Markeye. "
                     f"Glad you came back — what changed?"
                 )
-                await send_message(phone, returning_msg, client_id=client_id)
+                await send_message(phone, returning_msg, client_config=client_config)
                 new_session = {
                     "state": ConversationState.OPENING,
                     "history": [{"role": "assistant", "content": returning_msg}],
@@ -162,14 +162,14 @@ async def handle_special(state: GraphState) -> dict:
     """Handle /reset, #reset commands and interactive simulation mode."""
     from app.redis_client import redis_client
     from app.tracker import MarkTracker
-    from app.messaging import send_message
+    from app.message_router import send_message
     from app.supabase_client import supabase_client
 
     phone = state["phone"]
     message = state["message"]
     session = state["session"]
     lead_data = state["lead_data"]
-    lead_id = state.get("lead_id")
+    client_config = state.get("client_config")
     tracker = MarkTracker()
 
     # Simulation data collection
@@ -209,7 +209,7 @@ async def handle_special(state: GraphState) -> dict:
         await redis_client.save_session(phone, session)
         if lead_id:
             await tracker.update_state(lead_id, "Discovery")
-        await send_message(phone, "Perfect! I've updated your details. 🚀\n\nStarting outbound demo now... hold tight!", client_id=state.get("client_id"))
+        await send_message(phone, "Perfect! I've updated your details. 🚀\n\nStarting outbound demo now... hold tight!", client_config=client_config)
         await redis_client.clear_generating(phone)
         return {"should_exit": True, "exit_reason": "sim_handled", "session": session}
 
@@ -227,9 +227,9 @@ async def handle_special(state: GraphState) -> dict:
             await tracker.update_state(lead_id, "Opening")
 
         if cmd == "#reset":
-            await send_message(phone, "🚀 #reset: Simulation started! Let's get your details.\n\nType your **Name, Company Name, Industry** (e.g. Nihal, Horizon Estates, Real Estate)", client_id=state.get("client_id"))
+            await send_message(phone, "🚀 #reset: Simulation started! Let's get your details.\n\nType your **Name, Company Name, Industry** (e.g. Nihal, Horizon Estates, Real Estate)", client_config=client_config)
         else:
-            await send_message(phone, "I've reset the conversation for you. Please clear the chat on your end and start a new one whenever you're ready.\n\n(Tip: Use **#reset** if you want to start a full website form simulation!)", client_id=state.get("client_id"))
+            await send_message(phone, "I've reset the conversation for you. Please clear the chat on your end and start a new one whenever you're ready.\n\n(Tip: Use **#reset** if you want to start a full website form simulation!)", client_config=client_config)
 
         await redis_client.clear_generating(phone)
         return {"should_exit": True, "exit_reason": "reset_handled", "session": new_session}
@@ -283,11 +283,12 @@ async def classify_stage_node(state: GraphState) -> dict:
 async def check_spam_node(state: GraphState) -> dict:
     """Filter low-content spam. Never applies in OPENING state."""
     from app.redis_client import redis_client
-    from app.messaging import send_message
+    from app.message_router import send_message
 
     phone = state["phone"]
     message = state["message"]
     session = state["session"]
+    client_config = state.get("client_config")
 
     if session.get("state") == ConversationState.OPENING:
         return {"should_exit": False}
@@ -302,7 +303,7 @@ async def check_spam_node(state: GraphState) -> dict:
         session["low_content_count"] = count
 
         if count == 2:
-            await send_message(phone, "Haha what's up, you good?", client_id=state.get("client_id"))
+            await send_message(phone, "Haha what's up, you good?", client_config=client_config)
             await redis_client.save_session(phone, session)
             await redis_client.clear_generating(phone)
             return {"should_exit": True, "exit_reason": "low_content_tier1", "session": session}
@@ -310,7 +311,7 @@ async def check_spam_node(state: GraphState) -> dict:
         if count >= 3:
             session["state"] = ConversationState.WAITING
             await redis_client.save_session(phone, session)
-            await send_message(phone, "Hey, timing might be off. I'm here whenever you want to have a proper chat.", client_id=state.get("client_id"))
+            await send_message(phone, "Hey, timing might be off. I'm here whenever you want to have a proper chat.", client_config=client_config)
             await redis_client.clear_generating(phone)
             return {"should_exit": True, "exit_reason": "waiting_state", "session": session}
     else:
@@ -354,7 +355,7 @@ async def generate_response_node(state: GraphState) -> dict:
     from app.llm import llm_client
     from app.agent_tools import classify_tools
     from app.semantic_cache import semantic_cache
-    from app.messaging import send_typing_indicator
+    from app.message_router import send_typing_indicator
     from app.tracker import MarkTracker
     from app.redis_client import redis_client
 
@@ -374,11 +375,7 @@ async def generate_response_node(state: GraphState) -> dict:
         return {"tool_calls": tool_calls}
 
     # Typing indicator before LLM call
-    await send_typing_indicator(
-        phone,
-        state.get("conversation_id", ""),
-        state.get("message_id", ""),
-        client_id=client_id
+        client_config=client_config
     )
     if lead_id:
         await tracker.set_typing_status(lead_id, True)
@@ -387,7 +384,7 @@ async def generate_response_node(state: GraphState) -> dict:
     await redis_client.set_generating(phone)
 
     # Build context and call LLM
-    from app.conversation import build_enhanced_context
+    from app.graph_utils import build_enhanced_context
     messages = await build_enhanced_context(
         session, lead_data, message, knowledge_context, client_config=client_config
     )
@@ -454,11 +451,11 @@ async def execute_tools_node(state: GraphState) -> dict:
 
 async def deliver_response_node(state: GraphState) -> dict:
     """Send multi-bubble response to lead. Handles interrupt check."""
-    from app.messaging import send_chunked_messages
+    from app.message_router import send_chunked_messages
     from app.chunker import chunk_message
     from app.tracker import MarkTracker
     from app.redis_client import redis_client
-    from app.conversation import check_and_send_calendly
+    from app.graph_utils import check_and_send_calendly
 
     phone = state["phone"]
     response_text = state.get("response_text", "")
@@ -494,13 +491,7 @@ async def deliver_response_node(state: GraphState) -> dict:
 
     # Send
     chunks = chunk_message(response_text)
-    await send_chunked_messages(
-        to=phone,
-        chunks=chunks,
-        incoming_text=message,
-        last_message_ts=state.get("last_message_ts", 0),
-        message_id=state.get("message_id", ""),
-        client_id=state.get("client_id")
+        client_config=client_config
     )
 
     if lead_id:
@@ -518,7 +509,7 @@ async def persist_session_node(state: GraphState) -> dict:
     from app.redis_client import redis_client
     from app.tracker import MarkTracker
     from app.bant import handle_bant_extraction
-    from app.conversation import on_conversation_end
+    from app.graph_utils import on_conversation_end
 
     phone = state["phone"]
     session = state["session"]

@@ -16,6 +16,9 @@ async def get_query_embedding(text: str) -> List[float]:
     )
     return response.data[0].embedding
 
+import logging
+logger = logging.getLogger(__name__)
+
 async def retrieve_knowledge(query: str, threshold: float = 0.4, limit: int = 3) -> str:
     """Searches the knowledge base and returns concatenated context."""
     try:
@@ -46,5 +49,5 @@ async def retrieve_knowledge(query: str, threshold: float = 0.4, limit: int = 3)
         return "\n\n".join(context_parts)
 
     except Exception as e:
-        print(f"[Knowledge Base Error] {e}")
+        logger.error(f"[Knowledge Base Error] {e}")
         return ""

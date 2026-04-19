@@ -4,7 +4,7 @@ from fastapi import APIRouter, Request, HTTPException
 
 from app.redis_client import redis_client
 from app.supabase_client import supabase_client
-from app.messaging import send_chunked_messages
+from app.message_router import send_chunked_messages
 from app.tracker import MarkTracker
 from app.phone_utils import normalize_phone
 

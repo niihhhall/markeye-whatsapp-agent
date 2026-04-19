@@ -27,7 +27,7 @@ class TelemetryMiddleware(BaseHTTPMiddleware):
             "duration_ms": duration_ms
         }
         
-        print(json.dumps(log_data), flush=True)
+        logger.info(json.dumps(log_data))
         
         # Increment metrics
         if response.status_code >= 400:
@@ -50,4 +50,4 @@ def log_llm_call(provider: str, model: str, latency_ms: int, tokens_in: int, tok
         "client_id": client_id,
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     }
-    print(json.dumps(log_data), flush=True)
+    logger.info(json.dumps(log_data))

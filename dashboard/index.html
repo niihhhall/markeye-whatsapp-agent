@@ -160,6 +160,21 @@
         .badge.online { background: rgba(76, 175, 80, 0.2); color: #81c784; border: 1px solid rgba(76, 175, 80, 0.3); }
         .badge.pairing { background: rgba(255, 193, 7, 0.2); color: #ffd54f; border: 1px solid rgba(255, 193, 7, 0.3); }
         .badge.offline { background: rgba(244, 67, 54, 0.2); color: #e57373; border: 1px solid rgba(244, 67, 54, 0.3); }
+ 
+        .provider-badge {
+            background: rgba(255, 255, 255, 0.08);
+            color: #ccc;
+            border: 1px solid var(--border-glass);
+            padding: 0.2rem 0.6rem;
+            border-radius: 8px;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-left: 0.5rem;
+        }
+
+        .provider-baileys { color: #ffd54f; }
+        .provider-cloud { color: #81c784; }
 
         .card-stats {
             display: grid;
@@ -398,7 +413,12 @@
                             <h3>${client.business_name}</h3>
                             <p>${client.whatsapp_number}</p>
                         </div>
-                        <span class="badge ${status}">${status}</span>
+                        <div class="status-container" style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem;">
+                            <span class="badge ${status}">${status}</span>
+                            <span class="provider-badge provider-${client.messaging_provider === 'baileys' ? 'baileys' : 'cloud'}">
+                                ${client.messaging_provider === 'baileys' ? 'Baileys' : 'Cloud API'}
+                            </span>
+                        </div>
                     </div>
                     
                     <div class="card-stats">
