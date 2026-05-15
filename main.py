@@ -43,7 +43,19 @@ async def lifespan(app: FastAPI):
     from app.baileys_bridge import baileys_bridge
     from app.client_manager import client_manager
 
-    await load_conversation_library(redis_client.redis)
+    # Wrap Redis initialization in a background task to prevent blocking health checks
+    async def init_redis_data():
+        try:
+            logger.info("[Startup] Loading conversation library into Redis...")
+            # Set a 10s timeout to avoid hanging the whole app if Redis is unreachable
+            await asyncio.wait_for(load_conversation_library(redis_client.redis), timeout=10.0)
+            logger.info("[Startup] OK: Conversation library loaded")
+        except asyncio.TimeoutError:
+            logger.error("[Startup] ERROR: Redis timeout during conversation library load. Check Security Groups.")
+        except Exception as e:
+            logger.error(f"[Startup] ERROR: Failed to load library: {e}")
+
+    asyncio.create_task(init_redis_data())
     
     # Start Baileys Bridge for direct WhatsApp integration
     asyncio.create_task(baileys_bridge.start())
