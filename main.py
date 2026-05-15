@@ -7,6 +7,7 @@ from app.outbound import router as outbound_router
 from app.calcom import router as calcom_router
 from app.training_api import router as training_router
 from app.dashboard import router as dashboard_router
+from app.webhooks import router as whatsapp_webhook_router
 from app.config import settings
 import sentry_sdk
 import os

@@ -40,7 +40,7 @@ async def send_message(
 
     if provider == "whatsapp_cloud":
         from app import whatsapp_client as cloud
-        return await cloud.send_message(phone, text)
+        return await cloud.send_message(phone, text, client_config=client_config)
     else:
         from app.baileys_bridge import baileys_bridge
         return await baileys_bridge.send_message(phone, text, client_id=client_id)
@@ -67,7 +67,7 @@ async def send_typing_indicator(
 
     if provider == "whatsapp_cloud":
         from app import whatsapp_client as cloud
-        return await cloud.send_typing_indicator(phone, message_id=message_id)
+        return await cloud.send_typing_indicator(phone, message_id=message_id, client_config=client_config)
     else:
         from app.baileys_bridge import baileys_bridge
         return await baileys_bridge.send_typing_indicator(phone, client_id=client_id)
@@ -92,7 +92,7 @@ async def mark_as_read(
 
     if provider == "whatsapp_cloud":
         from app import whatsapp_client as cloud
-        await cloud.mark_as_read(message_id)
+        await cloud.mark_as_read(message_id, client_config=client_config)
         return True
     else:
         from app.baileys_bridge import baileys_bridge
@@ -137,7 +137,7 @@ async def send_template_message(
 
     if provider == "whatsapp_cloud":
         from app import whatsapp_client as cloud
-        return await cloud.send_template_message(phone, final_template, language_code, components)
+        return await cloud.send_template_message(phone, final_template, language_code, components, client_config=client_config)
     else:
         logger.info(
             "[Router] Baileys requested for template %s. Skipping — awaiting raw fallback.",

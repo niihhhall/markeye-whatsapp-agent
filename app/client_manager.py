@@ -116,9 +116,15 @@ class ClientManager:
         for client in clients:
             client_id = client.get("id")
             whatsapp_number = client.get("whatsapp_number")
+            provider = client.get("provider", "baileys") # Default to baileys for backward compat
+            
             if not client_id: continue
 
-            logger.info(f"[ClientManager] Starting session for {client.get('business_name')} ({client_id})")
+            if provider == "whatsapp_cloud":
+                logger.info(f"[ClientManager] Skipping Baileys for Cloud API client: {client.get('business_name')}")
+                continue
+
+            logger.info(f"[ClientManager] Starting Baileys session for {client.get('business_name')} ({client_id})")
             try:
                 # Signal the Baileys JS service to start this session
                 async with httpx.AsyncClient() as http_client:
