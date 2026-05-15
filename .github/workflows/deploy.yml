@@ -28,9 +28,17 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build & Push
+      - name: Build & Push Main Agent
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           docker build -t $ECR_REGISTRY/markeye-whatsapp-agent:latest .
           docker push $ECR_REGISTRY/markeye-whatsapp-agent:latest
+
+      - name: Build & Push Baileys Bridge
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          cd baileys-service
+          docker build -t $ECR_REGISTRY/baileys-service:latest .
+          docker push $ECR_REGISTRY/baileys-service:latest

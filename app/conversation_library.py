@@ -10,58 +10,59 @@ CONVERSATIONS_DIR = os.path.join(os.getcwd(), "conversations")
 
 
 async def load_conversation_library(redis):
-    """Load all example conversations into Redis on app startup."""
+    """Load all example conversations into Redis on app startup using a pipeline."""
     if not os.path.exists(CONVERSATIONS_DIR):
         logger.warning(f"Conversations directory not found: {CONVERSATIONS_DIR}")
         return
     
     count = 0
-    for filename in os.listdir(CONVERSATIONS_DIR):
-        if not filename.endswith(".json"):
-            continue
+    # Use pipeline for atomicity and speed (reduces 52 round-trips to 1)
+    async with redis.pipeline(transaction=False) as pipe:
+        for filename in os.listdir(CONVERSATIONS_DIR):
+            if not filename.endswith(".json"):
+                continue
+            
+            filepath = os.path.join(CONVERSATIONS_DIR, filename)
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                
+                conv_id = data["id"]
+                tags = data["tags"]
+                ttl = 86400 * 30
+                
+                # Store the full conversation
+                pipe.set(f"conv_example:{conv_id}", json.dumps(data), ex=ttl)
+                
+                # Index by industry
+                industry = tags.get("industry", "general")
+                pipe.sadd(f"conv_index:industry:{industry}", conv_id)
+                pipe.expire(f"conv_index:industry:{industry}", ttl)
+                
+                # Index by stage
+                stage = tags.get("stage", "general")
+                pipe.sadd(f"conv_index:stage:{stage}", conv_id)
+                pipe.expire(f"conv_index:stage:{stage}", ttl)
+                
+                # Index by objection type
+                for obj in tags.get("objections", []):
+                    if obj != "none":
+                        pipe.sadd(f"conv_index:objection:{obj}", conv_id)
+                        pipe.expire(f"conv_index:objection:{obj}", ttl)
+                
+                # Index by personality
+                personality = tags.get("personality", "unknown")
+                pipe.sadd(f"conv_index:personality:{personality}", conv_id)
+                pipe.expire(f"conv_index:personality:{personality}", ttl)
+                
+                count += 1
+            except Exception as e:
+                logger.error(f"Error preparing {filename} for pipeline: {e}")
         
-        filepath = os.path.join(CONVERSATIONS_DIR, filename)
-        try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            
-            conv_id = data["id"]
-            tags = data["tags"]
-            
-            # Store the full conversation
-            await redis.set(
-                f"conv_example:{conv_id}",
-                json.dumps(data),
-                ex=86400 * 30  # 30 day TTL
-            )
-            
-            # Index by industry
-            industry = tags.get("industry", "general")
-            await redis.sadd(f"conv_index:industry:{industry}", conv_id)
-            await redis.expire(f"conv_index:industry:{industry}", 86400 * 30)
-            
-            # Index by stage
-            stage = tags.get("stage", "general")
-            await redis.sadd(f"conv_index:stage:{stage}", conv_id)
-            await redis.expire(f"conv_index:stage:{stage}", 86400 * 30)
-            
-            # Index by objection type
-            for obj in tags.get("objections", []):
-                if obj != "none":
-                    await redis.sadd(f"conv_index:objection:{obj}", conv_id)
-                    await redis.expire(f"conv_index:objection:{obj}", 86400 * 30)
-            
-            # Index by personality
-            personality = tags.get("personality", "unknown")
-            await redis.sadd(f"conv_index:personality:{personality}", conv_id)
-            await redis.expire(f"conv_index:personality:{personality}", 86400 * 30)
-            
-            count += 1
-            
-        except Exception as e:
-            logger.error(f"Error loading {filename}: {e}")
+        # Execute all commands at once
+        await pipe.execute()
     
-    logger.info(f"Loaded {count} example conversations into library")
+    logger.info(f"Loaded {count} example conversations into library via pipeline")
 
 
 async def get_relevant_example(

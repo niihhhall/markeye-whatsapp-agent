@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
         try:
             logger.info("[Startup] Loading conversation library into Redis...")
             # Set a 10s timeout to avoid hanging the whole app if Redis is unreachable
-            await asyncio.wait_for(load_conversation_library(redis_client.redis), timeout=10.0)
+            await asyncio.wait_for(load_conversation_library(redis_client.redis), timeout=60.0)
             logger.info("[Startup] OK: Conversation library loaded")
         except asyncio.TimeoutError:
             logger.error("[Startup] ERROR: Redis timeout during conversation library load. Check Security Groups.")

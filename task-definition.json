@@ -1,0 +1,65 @@
+{
+    "family": "markeye-whatsapp-agent-v2",
+    "networkMode": "awsvpc",
+    "executionRoleArn": "arn:aws:iam::652816804838:role/service-role/ecsTaskExecutionRole",
+    "containerDefinitions": [
+        {
+            "name": "Main",
+            "image": "652816804838.dkr.ecr.ap-south-1.amazonaws.com/markeye-whatsapp-agent:latest",
+            "portMappings": [
+                {
+                    "containerPort": 8000,
+                    "hostPort": 8000,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                { "name": "BAILEYS_API_URL", "value": "http://localhost:3001" },
+                { "name": "ENVIRONMENT", "value": "production" },
+                { "name": "REDIS_URL", "value": "redis://markeye-whatsapp-agent-redis.1lpasj.ng.0001.aps1.cache.amazonaws.com:6379" },
+                { "name": "SUPABASE_URL", "value": "https://rdlcnzyteplgvgjiqzyj.supabase.co" },
+                { "name": "SUPABASE_SERVICE_KEY", "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkbGNuenl0ZXBsZ3ZnamlxenlqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTkwNzc4MCwiZXhwIjoyMDkxNDgzNzgwfQ.r51ZPjubKJuPqyY2wuOnyp69B9CC-PF8pA7Jm6xWuL4" },
+                { "name": "SUPABASE_KEY", "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkbGNuenl0ZXBsZ3ZnamlxenlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5MDc3ODAsImV4cCI6MjA5MTQ4Mzc4MH0.ZZcIECweulmir_bNZWioPHaypqJlol4MGnGzV0dh6rU" }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/aws/ecs/default/markeye-whatsapp-agent-5dfc",
+                    "awslogs-region": "ap-south-1",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            }
+        },
+        {
+            "name": "Bridge",
+            "image": "652816804838.dkr.ecr.ap-south-1.amazonaws.com/baileys-service:latest",
+            "portMappings": [
+                {
+                    "containerPort": 3001,
+                    "hostPort": 3001,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                { "name": "PORT", "value": "3001" },
+                { "name": "REDIS_URL", "value": "redis://markeye-whatsapp-agent-redis.1lpasj.ng.0001.aps1.cache.amazonaws.com:6379" },
+                { "name": "WHATSAPP_INBOUND_CHANNEL", "value": "inbound" }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/aws/ecs/default/markeye-whatsapp-agent-5dfc",
+                    "awslogs-region": "ap-south-1",
+                    "awslogs-stream-prefix": "ecs-bridge"
+                }
+            }
+        }
+    ],
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "512",
+    "memory": "1024"
+}
