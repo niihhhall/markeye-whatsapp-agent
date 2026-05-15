@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     # Groq (Primary)
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    PRIMARY_MODEL: str = "llama-3.3-70b-versatile"
 
     # Gemini (Secondary)
     GEMINI_API_KEY: str = ""
@@ -80,6 +81,7 @@ class Settings(BaseSettings):
     SHOW_TYPING_INDICATOR: bool = True
 
     # Baileys Settings
+    BAILEYS_API_URL: str = "http://localhost:3001"
     BAILEYS_AUTH_DIR: str = "./baileys-service/sessions"
     WHATSAPP_INBOUND_CHANNEL: str = "inbound"
     WHATSAPP_OUTBOUND_CHANNEL: str = "outbound"

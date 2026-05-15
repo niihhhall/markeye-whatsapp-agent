@@ -195,35 +195,46 @@ async def execute_tool_call(
     client_config: Optional[dict] = None,
 ) -> None:
     """Dispatch tool execution by name."""
-    from app.message_router import send_poll, send_media, forward_message, send_typing_indicator
+    from app.message_router import send_poll, send_media, forward_message
     from app.config import settings
     from app.redis_client import redis_client
 
     logger.info("[AgentTools] Executing tool '%s' for %s", tool_name, phone)
 
-    client_id = client_config.get("id") if client_config else None
-
-    if tool_name == "send_booking_poll":
-            client_config=client_config
-        )
-
-    elif tool_name == "send_booking_link":
-        # Link is embedded in response_text by the LLM; just track it was sent
+    if tool_name == "send_booking_link":
         await redis_client.mark_calendly_sent(phone)
-
-    elif tool_name == "send_pricing_doc":
-        pricing_url = (client_config.get("settings") or {}).get("pricing_url") or settings.PRICING_PDF_URL
-            client_config=client_config
-        )
-
-    elif tool_name == "escalate_to_human":
-        sales_number = client_config.get("sales_contact") or settings.SALES_PHONE_NUMBER
-        if sales_number:
-                client_config=client_config
-            )
 
     elif tool_name == "close_conversation":
         from app.models import ConversationState as CS
         if session is not None:
             session["state"] = CS.CLOSED
             await redis_client.save_session(phone, session)
+
+    elif tool_name == "send_booking_poll":
+        options = ["Today", "Tomorrow", "Next Week"]
+        await send_poll(
+            phone=phone,
+            question="When would you like to schedule a discovery call?",
+            options=options,
+            client_config=client_config
+        )
+
+    elif tool_name == "send_pricing_doc":
+        pricing_url = (client_config.get("settings") or {}).get("pricing_url") or settings.PRICING_PDF_URL
+        await send_media(
+            phone=phone,
+            media_url=pricing_url,
+            media_type="document",
+            caption="Here is our pricing overview as requested.",
+            client_config=client_config
+        )
+
+    elif tool_name == "escalate_to_human":
+        sales_number = client_config.get("sales_contact") or settings.SALES_PHONE_NUMBER
+        if sales_number:
+            await forward_message(
+                phone=phone,
+                original_msg_id=message_id,
+                forward_to=sales_number,
+                client_config=client_config
+            )
