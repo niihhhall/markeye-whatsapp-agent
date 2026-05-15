@@ -324,6 +324,15 @@ app.listen(PORT, () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function coldStart() {
+    // ONE-TIME EMERGENCY WIPE (Remove this after successful link)
+    const SESSION_ID = "eb89a504-7a6d-453f-89cd-3c95ed2a22f1";
+    logger.info(`[ColdStart] Wiping session ${SESSION_ID} to clear connection loop...`);
+    await redis.del(`baileys:auth:${SESSION_ID}:creds`);
+    const keys = await redis.keys(`baileys:auth:${SESSION_ID}:keys:*`);
+    if (keys.length) await redis.del(...keys);
+    await redis.del(`baileys:session_active:${SESSION_ID}`);
+    await redis.srem('baileys:active_sessions', SESSION_ID);
+
     const active = await redis.smembers('baileys:active_sessions');
     logger.info(`[ColdStart] Found ${active.length} active sessions in Redis to recover.`);
     for (const sid of active) {
