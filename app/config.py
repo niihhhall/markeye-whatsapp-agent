@@ -33,14 +33,14 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = ""
 
     # Redis
-    REDIS_URL: str
+    REDIS_URL: str = "redis://localhost:6379"
     UPSTASH_REDIS_REST_URL: str = ""
     UPSTASH_REDIS_REST_TOKEN: str = ""
 
     # Supabase
-    SUPABASE_URL: str
-    SUPABASE_KEY: str
-    SUPABASE_SERVICE_KEY: str
+    SUPABASE_URL: str = ""
+    SUPABASE_KEY: str = ""
+    SUPABASE_SERVICE_KEY: str = ""
 
     # Sentry
     SENTRY_DSN: str = ""

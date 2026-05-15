@@ -158,7 +158,7 @@ class RedisClient:
             length = await self.redis.llen(f"buffer:{phone}")
             return length > 0
         except Exception as e:
-            logger.error(f"[Redis] {{name}} failed: {e}")
+            logger.error(f"[Redis] has_new_messages failed: {e}")
             return False
 
     async def lrange(self, key: str, start: int, stop: int) -> List[str]:
