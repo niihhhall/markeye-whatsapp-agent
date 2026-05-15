@@ -55,6 +55,7 @@ class Settings(BaseSettings):
 
     # Security (Fix 1)
     ALLOWED_ORIGINS: str = "http://localhost:3000"  # comma-separated list in .env
+    OUTBOUND_API_KEY: str = ""
 
     # App
     DEBUG: bool = False

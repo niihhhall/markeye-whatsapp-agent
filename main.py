@@ -116,6 +116,11 @@ async def get_metrics():
             "gemini": metrics.get("llm_provider:gemini", 0),
             "cerebras": metrics.get("llm_provider:cerebras", 0),
         },
+        "llm_provider_fallbacks": {
+            "groq": metrics.get("llm_fallback:groq", 0),
+            "gemini": metrics.get("llm_fallback:gemini", 0),
+            "cerebras": metrics.get("llm_fallback:cerebras", 0),
+        },
         "errors_total": metrics.get("errors_http", 0),
         "estimated_token_burn": metrics.get("total_tokens", 0)
     }

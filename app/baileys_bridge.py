@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import time
+from typing import Optional
 from app.config import settings
 from app.redis_client import redis_client
 from app.webhook import (
@@ -11,6 +12,12 @@ from app.webhook import (
 )
 
 logger = logging.getLogger(__name__)
+
+def _log_task_error(task: asyncio.Task) -> None:
+    """Callback to surface exceptions from fire-and-forget asyncio tasks."""
+    exc = task.exception() if not task.cancelled() else None
+    if exc:
+        logger.error("[BaileysBridge] Background task failed: %s", exc, exc_info=exc)
 
 class BaileysBridge:
     def __init__(self):
@@ -82,14 +89,17 @@ class BaileysBridge:
 
             # 5. Fire delayed processor (reusing webhook logic)
             # Since we don't have BackgroundTasks here, we use create_task
-            asyncio.create_task(delayed_buffer_process(sender_phone, batch_id, message_ts, client_id=client_id))
+            task1 = asyncio.create_task(delayed_buffer_process(sender_phone, batch_id, message_ts, client_id=client_id))
+            task1.add_done_callback(_log_task_error)
 
             # 6. Fire hard-max safety check
             if is_first:
-                asyncio.create_task(hard_max_check(sender_phone, message_ts, client_id=client_id))
+                task2 = asyncio.create_task(hard_max_check(sender_phone, message_ts, client_id=client_id))
+                task2.add_done_callback(_log_task_error)
 
             # 7. Tracker Log
-            asyncio.create_task(background_tracker_log(sender_phone, sender_name, message_text, client_id=client_id))
+            task3 = asyncio.create_task(background_tracker_log(sender_phone, sender_name, message_text, client_id=client_id))
+            task3.add_done_callback(_log_task_error)
 
         except Exception as e:
             logger.error(f"[Baileys Bridge] ❌ Failed to handle message: {e}")

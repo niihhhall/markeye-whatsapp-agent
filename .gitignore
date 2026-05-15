@@ -18,3 +18,10 @@ baileys-service/setup_server.sh
 baileys-service/sessions.zip
 *.zip
 .pytest_cache/
+
+# Lead conversation data — never commit
+conversations/
+*.conversation.json
+sessions/
+baileys-service/sessions/
+scratch/

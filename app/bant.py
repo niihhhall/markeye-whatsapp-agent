@@ -128,8 +128,11 @@ async def handle_bant_extraction(phone: str, message: str, history: List[Dict[st
         
         if should_extract_bant(message, count, current_state):
             logger.info(f"[BANT] Triggering extraction for {phone} (Count: {count})")
-            await extract_bant(phone, history, client_config)
-            await redis_client.redis.set(count_key, "0") # Reset
+            try:
+                await extract_bant(phone, history, client_config)
+            finally:
+                # Always reset count — whether extraction succeeded or failed
+                await redis_client.redis.set(count_key, "0")
         else:
             await redis_client.redis.set(count_key, str(count))
             logger.info(f"[BANT] Skipping extraction for {phone} (Count: {count})")

@@ -71,7 +71,7 @@ async def classify_stage_with_llm(
         result = await llm_router.generate_completion(
             messages=[{"role": "user", "content": prompt}],
             model_override=settings.GEMINI_MODEL,
-            timeout=3.0,
+            timeout=6.0,  # Changed from 3.0 — Gemini needs headroom
         )
         stage_str = result["content"].strip().upper()
 
@@ -93,6 +93,12 @@ async def classify_stage_with_llm(
 
     except Exception as e:
         logger.warning("[StateMachine] LLM stage classifier error: %s", e)
+        # Track classifier timeouts for monitoring
+        try:
+            from app.redis_client import redis_client
+            await redis_client.redis.incr("metrics:stage_classifier_failures")
+        except Exception:
+            pass
         return None
 
 

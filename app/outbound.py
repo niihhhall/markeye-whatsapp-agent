@@ -1,6 +1,7 @@
 import asyncio
 import logging
-from fastapi import APIRouter, Body, BackgroundTasks
+from fastapi import APIRouter, Body, BackgroundTasks, Depends, HTTPException, Header
+from app.config import settings
 from app.models import LeadCreate
 from app.supabase_client import supabase_client
 from app.message_router import (
@@ -21,6 +22,22 @@ import random
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+async def verify_outbound_api_key(x_api_key: str = Header(default="")):
+    """Guard outbound endpoints with a static API key."""
+    if settings.OUTBOUND_API_KEY and x_api_key != settings.OUTBOUND_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+async def check_outbound_rate_limit(phone: str, max_per_hour: int = 10) -> bool:
+    """Returns True if message is allowed, False if rate limit exceeded."""
+    rate_key = f"outbound_rate:{phone}"
+    count = await redis_client.redis.incr(rate_key)
+    if count == 1:
+        await redis_client.redis.expire(rate_key, 3600)  # 1 hour window
+    if count > max_per_hour:
+        logger.warning("[Outbound] Rate limit exceeded for %s (%d msgs/hr)", phone, count)
+        return False
+    return True
 
 async def send_initial_outreach(name_raw: str, phone_raw: str, company_raw: str, form_data: dict = None, client_id: str = None):
     """Sends the first outbound message after a delay."""
@@ -56,9 +73,10 @@ async def send_initial_outreach(name_raw: str, phone_raw: str, company_raw: str,
         # 2. Start outreach sequence (Wait for lead to settle)
         # Simulation Reliability: Skip delay for testing
         is_sim = form_data and form_data.get("source") == "Interactive Reset Simulation"
-        if not is_sim:
-            await asyncio.sleep(15)
-        
+        # 0. Rate Limit Check (Enhancement: TASK 8)
+        if not await check_outbound_rate_limit(sender_phone):
+            return
+
         # 3. Outreach Content
         if client_config and client_config.get("greeting_message"):
             business_name = client_config.get("business_name", "Markeye")
@@ -139,12 +157,12 @@ async def send_initial_outreach(name_raw: str, phone_raw: str, company_raw: str,
     except Exception as e:
         logger.error("[Outreach] 🚨 Failed to send initial outreach for %s: %s", phone_raw, e, exc_info=True)
 
-@router.post("/send-outbound")
+@router.post("/send-outbound", dependencies=[Depends(verify_outbound_api_key)])
 async def send_outbound(lead: LeadCreate, background_tasks: BackgroundTasks = None):
     asyncio.create_task(send_initial_outreach(lead.name, lead.phone, lead.company, client_id=lead.client_id))
     return {"status": "outreach_scheduled"}
 
-@router.post("/form-webhook")
+@router.post("/form-webhook", dependencies=[Depends(verify_outbound_api_key)])
 async def form_webhook(payload: dict):
     """Endpoint for n8n/website form submissions."""
     name = payload.get("first_name") or payload.get("name")
@@ -161,6 +179,10 @@ async def form_webhook(payload: dict):
 async def send_follow_up_message(lead_id: str, name: str, phone: str):
     """Sends the 24-hour follow-up message."""
     try:
+        # Rate Limit Check (Enhancement: TASK 8)
+        if not await check_outbound_rate_limit(phone):
+            return
+
         tracker = MarkTracker()
         
         # 1. Formatting the follow-up content
@@ -188,7 +210,7 @@ async def send_follow_up_message(lead_id: str, name: str, phone: str):
     except Exception as e:
         logger.error("[Follow-up] 🚨 Failed to send follow-up for %s: %s", name, e, exc_info=True)
 
-@router.post("/follow-up")
+@router.post("/follow-up", dependencies=[Depends(verify_outbound_api_key)])
 async def trigger_follow_up(payload: dict = Body(...)):
     """Admin endpoint to manually trigger a follow-up for a lead."""
     lead_id = payload.get("lead_id")

@@ -1,63 +1,13 @@
-"""
-LangGraph StateGraph — Markeye Conversation Orchestration Engine.
-
-Implements the Whatsapp-Langgraph-Agent-Integration pattern:
-  Each node is an isolated async handler for one stage of the conversation.
-  Conditional edges route based on state flags, replacing the monolithic
-  process_conversation() imperative flow.
-
-Node chain:
-  load_context → [handle_special | classify_stage]
-  classify_stage → check_spam → retrieve_knowledge → generate_response
-  generate_response → execute_tools → deliver_response → persist_session → END
-"""
 import asyncio
 import json
 import logging
 import re
 from datetime import datetime, timezone
-from typing import TypedDict, Optional, List, Any
-
-from langgraph.graph import StateGraph, END
-
 from app.models import ConversationState
 from app.config import settings
+from .state import GraphState
 
 logger = logging.getLogger(__name__)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Graph State Schema
-# ─────────────────────────────────────────────────────────────────────────────
-
-class GraphState(TypedDict):
-    # ── Input params ─────────────────────────────────────
-    phone: str
-    message: str
-    conversation_id: str
-    message_id: str
-    last_message_ts: float
-    client_id: Optional[str]
-
-    # ── Loaded context ────────────────────────────────────
-    session: dict
-    lead_data: dict
-    lead_id: Optional[str]
-    client_config: Optional[dict]
-
-    # ── Processing ────────────────────────────────────────
-    knowledge_context: str
-    response_text: str
-    tool_calls: List[str]
-
-    # ── Control flow ──────────────────────────────────────
-    should_exit: bool
-    exit_reason: str
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NODE 1 — Load context
-# ─────────────────────────────────────────────────────────────────────────────
 
 async def load_context(state: GraphState) -> dict:
     """Load session, lead data, and client config. Handle 24h returning lead."""
@@ -153,11 +103,6 @@ async def load_context(state: GraphState) -> dict:
         "tool_calls": [],
     }
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NODE 2 — Handle special commands (/reset, #reset, sim_collecting)
-# ─────────────────────────────────────────────────────────────────────────────
-
 async def handle_special(state: GraphState) -> dict:
     """Handle /reset, #reset commands and interactive simulation mode."""
     from app.redis_client import redis_client
@@ -169,6 +114,7 @@ async def handle_special(state: GraphState) -> dict:
     message = state["message"]
     session = state["session"]
     lead_data = state["lead_data"]
+    lead_id = state.get("lead_id")
     client_config = state.get("client_config")
     tracker = MarkTracker()
 
@@ -236,16 +182,11 @@ async def handle_special(state: GraphState) -> dict:
 
     return {"should_exit": False}
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NODE 3 — LLM Stage Classifier  (SalesGPT dual-chain pattern)
-# ─────────────────────────────────────────────────────────────────────────────
-
 async def classify_stage_node(state: GraphState) -> dict:
     """
     Runs LLM stage classifier concurrently with rule-based transition check.
     LLM result takes precedence; rule-based is fallback.
-    3-second timeout so this never blocks the response.
+    6-second timeout (updated Task 4).
     """
     from app.state_machine import check_transition, classify_stage_with_llm
 
@@ -257,7 +198,7 @@ async def classify_stage_node(state: GraphState) -> dict:
     try:
         llm_stage = await asyncio.wait_for(
             classify_stage_with_llm(session.get("history", []), current_state),
-            timeout=3.0,
+            timeout=6.0,
         )
         if llm_stage and llm_stage != current_state:
             logger.info("[Graph] LLM reclassified %s → %s for %s", current_state, llm_stage, state["phone"])
@@ -274,11 +215,6 @@ async def classify_stage_node(state: GraphState) -> dict:
         session["state"] = new_state
 
     return {"session": session}
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NODE 4 — Spam / low-content check
-# ─────────────────────────────────────────────────────────────────────────────
 
 async def check_spam_node(state: GraphState) -> dict:
     """Filter low-content spam. Never applies in OPENING state."""
@@ -319,11 +255,6 @@ async def check_spam_node(state: GraphState) -> dict:
 
     return {"should_exit": False, "session": session}
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NODE 5 — Knowledge retrieval (RAG + semantic cache)
-# ─────────────────────────────────────────────────────────────────────────────
-
 async def retrieve_knowledge_node(state: GraphState) -> dict:
     """RAG retrieval + semantic cache check before LLM call."""
     from app.knowledge import retrieve_knowledge
@@ -345,13 +276,8 @@ async def retrieve_knowledge_node(state: GraphState) -> dict:
     knowledge_context = await retrieve_knowledge(message)
     return {"knowledge_context": knowledge_context or ""}
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NODE 6 — Generate response + classify tools
-# ─────────────────────────────────────────────────────────────────────────────
-
 async def generate_response_node(state: GraphState) -> dict:
-    """Main LLM generation + separate tool classification (Knotie-AI + llmstatemachine pattern)."""
+    """Main LLM generation + separate tool classification."""
     from app.llm import llm_client
     from app.agent_tools import classify_tools
     from app.semantic_cache import semantic_cache
@@ -375,8 +301,7 @@ async def generate_response_node(state: GraphState) -> dict:
         return {"tool_calls": tool_calls}
 
     # Typing indicator before LLM call
-        client_config=client_config
-    )
+    await send_typing_indicator(phone, client_config=client_config)
     if lead_id:
         await tracker.set_typing_status(lead_id, True)
 
@@ -411,15 +336,10 @@ async def generate_response_node(state: GraphState) -> dict:
     # Clean any remaining legacy bracket tokens from response
     response_text = re.sub(r'(?i)\[[A-Z0-9\s_]+:?.*?\]', '', response_text).strip()
 
-    # Classify which tools to fire (per-state whitelist enforced inside classify_tools)
+    # Classify which tools to fire
     tool_calls = await classify_tools(session, message, response_text)
 
     return {"response_text": response_text, "tool_calls": tool_calls, "should_exit": False}
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NODE 7 — Execute tool calls
-# ─────────────────────────────────────────────────────────────────────────────
 
 async def execute_tools_node(state: GraphState) -> dict:
     """Fire any tools the classifier decided on."""
@@ -444,11 +364,6 @@ async def execute_tools_node(state: GraphState) -> dict:
 
     return {"session": session}
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NODE 8 — Deliver response
-# ─────────────────────────────────────────────────────────────────────────────
-
 async def deliver_response_node(state: GraphState) -> dict:
     """Send multi-bubble response to lead. Handles interrupt check."""
     from app.message_router import send_chunked_messages
@@ -470,6 +385,7 @@ async def deliver_response_node(state: GraphState) -> dict:
     # Interrupt check — new messages during LLM processing
     new_messages_str = await redis_client.get_and_clear_buffer(phone)
     if new_messages_str:
+        from .builder import workflow
         logger.info("[Graph] Interrupt detected for %s — re-invoking with combined input.", phone)
         combined_message = message + "\n" + new_messages_str
         await redis_client.clear_generating(phone)
@@ -491,18 +407,12 @@ async def deliver_response_node(state: GraphState) -> dict:
 
     # Send
     chunks = chunk_message(response_text)
-        client_config=client_config
-    )
+    await send_chunked_messages(phone, chunks, client_config=client_config)
 
     if lead_id:
         await tracker.set_typing_status(lead_id, False)
 
     return {"response_text": response_text}
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NODE 9 — Persist session
-# ─────────────────────────────────────────────────────────────────────────────
 
 async def persist_session_node(state: GraphState) -> dict:
     """Update history, run BANT extraction, save session, trigger background tasks."""
@@ -577,84 +487,3 @@ async def persist_session_node(state: GraphState) -> dict:
     )
 
     return {"session": session}
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Conditional edge routing functions
-# ─────────────────────────────────────────────────────────────────────────────
-
-def route_after_load(state: GraphState) -> str:
-    if state.get("should_exit"):
-        return END
-    msg = state.get("message", "").strip().lower()
-    sess = state.get("session", {})
-    if msg.startswith(("/reset", "#reset")) or sess.get("sim_collecting"):
-        return "handle_special"
-    return "classify_stage"
-
-
-def route_after_special(state: GraphState) -> str:
-    return END if state.get("should_exit") else "classify_stage"
-
-
-def route_after_spam(state: GraphState) -> str:
-    return END if state.get("should_exit") else "retrieve_knowledge"
-
-
-def route_after_generate(state: GraphState) -> str:
-    return END if state.get("should_exit") else "execute_tools"
-
-
-def route_after_deliver(state: GraphState) -> str:
-    return END if state.get("should_exit") else "persist_session"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Build and compile the graph
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _build_graph():
-    graph = StateGraph(GraphState)
-
-    graph.add_node("load_context",       load_context)
-    graph.add_node("handle_special",     handle_special)
-    graph.add_node("classify_stage",     classify_stage_node)
-    graph.add_node("check_spam",         check_spam_node)
-    graph.add_node("retrieve_knowledge", retrieve_knowledge_node)
-    graph.add_node("generate_response",  generate_response_node)
-    graph.add_node("execute_tools",      execute_tools_node)
-    graph.add_node("deliver_response",   deliver_response_node)
-    graph.add_node("persist_session",    persist_session_node)
-
-    graph.set_entry_point("load_context")
-
-    graph.add_conditional_edges(
-        "load_context", route_after_load,
-        {END: END, "handle_special": "handle_special", "classify_stage": "classify_stage"},
-    )
-    graph.add_conditional_edges(
-        "handle_special", route_after_special,
-        {END: END, "classify_stage": "classify_stage"},
-    )
-    graph.add_edge("classify_stage",     "check_spam")
-    graph.add_conditional_edges(
-        "check_spam", route_after_spam,
-        {END: END, "retrieve_knowledge": "retrieve_knowledge"},
-    )
-    graph.add_edge("retrieve_knowledge", "generate_response")
-    graph.add_conditional_edges(
-        "generate_response", route_after_generate,
-        {END: END, "execute_tools": "execute_tools"},
-    )
-    graph.add_edge("execute_tools",      "deliver_response")
-    graph.add_conditional_edges(
-        "deliver_response", route_after_deliver,
-        {END: END, "persist_session": "persist_session"},
-    )
-    graph.add_edge("persist_session", END)
-
-    return graph.compile()
-
-
-# Compiled workflow — imported by conversation.py
-workflow = _build_graph()

@@ -107,6 +107,12 @@ class SmartLLMRouter:
                 
             except (RateLimitError, APIStatusError) as e:
                 logger.warning(f"[SmartLLMRouter] ⚠️ {provider_name} failed (RateLimit/API): {e}")
+                # Track fallback events in Redis for /metrics endpoint
+                try:
+                    from app.redis_client import redis_client
+                    await redis_client.redis.incr(f"metrics:llm_fallback:{provider_name.lower()}")
+                except Exception:
+                    pass
                 last_error = e
                 continue
             except Exception as e:

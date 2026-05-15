@@ -82,6 +82,26 @@ npm run dev
 
 ---
 
+## 📱 Messaging Provider
+
+Mark supports a dual-channel messaging architecture to balance development speed with production reliability.
+
+1.  **Baileys mode** (`MESSAGING_PROVIDER=baileys`):
+    - **Usage**: For local development and testing only.
+    - **Mechanism**: uses a reverse-engineered library to emulate a WhatsApp Web session.
+    - **Warning**: Never use for client accounts in production. High risk of WhatsApp ban.
+2.  **WhatsApp Cloud API mode** (`MESSAGING_PROVIDER=whatsapp_cloud`):
+    - **Usage**: Mandatory for all production deployments.
+    - **Mechanism**: The official Meta API path.
+    - **Requirements**: Needs `WHATSAPP_PHONE_NUMBER_ID` and `WHATSAPP_ACCESS_TOKEN` from Meta Business Manager.
+3.  **Safety Lock**:
+    - When `ENVIRONMENT=production`, the application automatically blocks the Baileys provider and forces `whatsapp_cloud` to protect account integrity.
+4.  **Meta Template Requirement**:
+    - The first outbound message to any new lead **MUST** be a pre-approved Meta message template.
+    - Free-form messages are only allowed after the lead replies (opening the 24-hour customer service window).
+
+---
+
 ## 🎯 Trigger Maneuvers
 Include these tags in your knowledge base or system prompt to trigger agent actions:
 - `[SEND_PRICING]` — Dispatches sales collateral immediately.
