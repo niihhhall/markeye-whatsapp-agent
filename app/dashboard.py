@@ -75,3 +75,4 @@ async def start_session(data: dict):
 
 @router.get("/sessions/{client_id}/qr")
 async def get_session_qr(client_id: str):
+    pass
