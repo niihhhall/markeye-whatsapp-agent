@@ -144,12 +144,10 @@ async def send_initial_outreach(name_raw: str, phone_raw: str, company_raw: str,
             if not is_sim:
                 logger.warning("[Outreach] ⚠️ Template send failed or Baileys selected. Falling back to raw text.")
             
-            # 5. Fallback: Human-like delivery — bypass chunking for template
+            # Note: typing indicator and delays are handled INSIDE deliver_outbound_sequence.
+            from app.human_behavior import deliver_outbound_sequence
             chunks = chunk_message(first_message_content, is_template=True)
-            
-            # Note: typing indicator and delays are handled INSIDE send_chunked_messages.
-            # This is where the long delays (>30s) happen.
-            await send_chunked_messages(sender_phone, chunks, client_config=client_config, interruptible=False)
+            await deliver_outbound_sequence(sender_phone, chunks, client_config=client_config)
             
             # Log to Supabase
             await tracker.log_outbound(lead_id, first_message_content, client_id=client_id)
@@ -192,8 +190,9 @@ async def send_follow_up_message(lead_id: str, name: str, phone: str):
         
         # 2. Human-like delivery — bypass chunking for follow-up template
         from app.chunker import chunk_message
+        from app.human_behavior import deliver_outbound_sequence
         chunks = chunk_message(follow_up_content, is_template=True)
-        await send_chunked_messages(phone, chunks, interruptible=False)
+        await deliver_outbound_sequence(phone, chunks)
         
         # 3. Log to Supabase
         await tracker.log_outbound(lead_id, follow_up_content)

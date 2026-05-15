@@ -364,9 +364,16 @@ async def execute_tools_node(state: GraphState) -> dict:
 
     return {"session": session}
 
-async def deliver_response_node(state: GraphState) -> dict:
-    """Send multi-bubble response to lead. Handles interrupt check."""
-    from app.message_router import send_chunked_messages
+async def deliver_response_node(state) -> dict:
+    """
+    Send multi-bubble response with full human micro-interaction sequence.
+
+    Changes from original:
+      - Calls human_behavior.deliver_with_human_timing instead of send_chunked_messages
+      - Threads message_id from GraphState through to typing indicator + mark_as_read
+      - Returns should_exit=True on interrupt (re-invoke handled by builder edge)
+    """
+    from app.human_behavior import deliver_with_human_timing
     from app.chunker import chunk_message
     from app.tracker import MarkTracker
     from app.redis_client import redis_client
@@ -375,6 +382,8 @@ async def deliver_response_node(state: GraphState) -> dict:
     phone = state["phone"]
     response_text = state.get("response_text", "")
     message = state["message"]
+    message_id = state.get("message_id", "")          # ← threaded from GraphState
+    last_message_ts = state.get("last_message_ts", 0.0)  # ← threaded from GraphState
     lead_id = state.get("lead_id")
     client_config = state.get("client_config")
     tracker = MarkTracker()
@@ -382,11 +391,13 @@ async def deliver_response_node(state: GraphState) -> dict:
     if not response_text:
         return {}
 
-    # Interrupt check — new messages during LLM processing
+    # ── Interrupt check: new messages arrived during LLM generation ────────
     new_messages_str = await redis_client.get_and_clear_buffer(phone)
     if new_messages_str:
-        from .builder import workflow
-        logger.info("[Graph] Interrupt detected for %s — re-invoking with combined input.", phone)
+        from app.graph.builder import workflow
+        import logging
+        logger = __import__("logging").getLogger(__name__)
+        logger.info("[Graph] Interrupt detected for %s — re-invoking.", phone)
         combined_message = message + "\n" + new_messages_str
         await redis_client.clear_generating(phone)
         new_state = {
@@ -400,15 +411,36 @@ async def deliver_response_node(state: GraphState) -> dict:
         await workflow.ainvoke(new_state)
         return {"should_exit": True, "exit_reason": "re_invoked"}
 
-    # Calendly tracking
+    # ── Calendly link tracking ─────────────────────────────────────────────
     response_text = await check_and_send_calendly(
         phone, response_text, state["session"], client_config=client_config
     )
 
-    # Send
+    # ── Chunk the response ─────────────────────────────────────────────────
     chunks = chunk_message(response_text)
-    await send_chunked_messages(phone, chunks, client_config=client_config)
 
+    # ── Deliver with human micro-interaction sequence ──────────────────────
+    # deliver_with_human_timing owns: blue tick → reading delay → think →
+    # typing indicator → typing delay → review pause → send
+    # Works for both Cloud API and Baileys via message_router.
+    delivered = await deliver_with_human_timing(
+        phone=phone,
+        chunks=chunks,
+        incoming_text=message,          # lead's message → reading_delay calc
+        message_id=message_id,          # → typing indicator + mark_as_read
+        last_message_ts=last_message_ts,  # → blue tick timing
+        client_config=client_config,
+    )
+
+    if not delivered:
+        # Interrupted mid-delivery — new message arrived
+        # persist_session will still run (edge allows it), history partial
+        import logging
+        logging.getLogger(__name__).info(
+            "[Graph] Delivery interrupted for %s — new message arrived.", phone
+        )
+
+    # ── Clear typing status in tracker ────────────────────────────────────
     if lead_id:
         await tracker.set_typing_status(lead_id, False)
 
