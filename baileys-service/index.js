@@ -69,8 +69,14 @@ async function useRedisAuthState(sessionId) {
     // Initialize creds
     let creds = await readData(credsKey);
     if (!creds) {
-        creds = (await useMultiFileAuthState('./temp')).state.creds; // Generator
+        const tempFolder = path.join(process.cwd(), `temp-${sessionId}`);
+        creds = (await useMultiFileAuthState(tempFolder)).state.creds; // Generator
         await writeData(creds, credsKey);
+        try {
+            fs.rmSync(tempFolder, { recursive: true, force: true });
+        } catch (e) {
+            // Ignore cleanup errors
+        }
     }
 
     return {
