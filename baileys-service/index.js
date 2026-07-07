@@ -26,8 +26,14 @@ const INBOUND_CHANNEL = process.env.WHATSAPP_INBOUND_CHANNEL || 'inbound';
 const OUTBOUND_CHANNEL_PREFIX = 'outbound';
 
 // Main Redis clients
-const redis = new Redis(REDIS_URL);
-const subscriber = new Redis(REDIS_URL);
+const redisOptions = {};
+if (REDIS_URL.startsWith('rediss://')) {
+    redisOptions.tls = {
+        rejectUnauthorized: false
+    };
+}
+const redis = new Redis(REDIS_URL, redisOptions);
+const subscriber = new Redis(REDIS_URL, redisOptions);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // REDIS AUTH STATE IMPLEMENTATION
