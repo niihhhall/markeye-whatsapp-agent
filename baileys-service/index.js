@@ -141,7 +141,7 @@ class SessionManager {
             markOnlineOnConnect: true,
         });
 
-        this.sessions.set(sessionId, { sock, status: 'connecting', qr: null });
+        this.sessions.set(sessionId, { sock, status: 'connecting', qr: null, pairingPhone });
 
         // Pairing Code Support
         if (!sock.authState.creds.registered && pairingPhone) {
@@ -178,8 +178,15 @@ class SessionManager {
                 
                 if (shouldReconnect) {
                     logger.info(`[SessionManager] Session ${sessionId} disconnected. Reconnecting...`);
+                    const oldPairingPhone = sessionData.pairingPhone;
+                    
+                    if (!sock.authState.creds.registered) {
+                        logger.info(`[SessionManager] Session not registered. Cleaning up auth state before reconnect.`);
+                        await this.cleanupSession(sessionId);
+                    }
+                    
                     this.sessions.delete(sessionId);
-                    setTimeout(() => this.initSession(sessionId), 5000);
+                    setTimeout(() => this.initSession(sessionId, oldPairingPhone), 5000);
                 } else {
                     logger.info(`[SessionManager] Session ${sessionId} logged out.`);
                     this.sessions.delete(sessionId);
