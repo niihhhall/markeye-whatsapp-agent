@@ -80,11 +80,18 @@ class Settings(BaseSettings):
     MARK_AS_READ_DELAY: float = 2.0
     SHOW_TYPING_INDICATOR: bool = True
 
-    # Baileys Settings
+    # Baileys Settings (Legacy / Fallback)
     BAILEYS_API_URL: str = "http://localhost:3001"
     BAILEYS_AUTH_DIR: str = "./baileys-service/sessions"
     WHATSAPP_INBOUND_CHANNEL: str = "inbound"
     WHATSAPP_OUTBOUND_CHANNEL: str = "outbound"
+
+    # OpenWA Settings
+    OPENWA_API_URL: str = "http://localhost:2785"
+    OPENWA_API_KEY: str = "markeye_openwa_key"
+    OPENWA_WEBHOOK_SECRET: str = "markeye_webhook_secret"
+    OPENWA_WEBHOOK_URL: str = "http://fastapi:8000/webhook/openwa"
+
     SALES_PHONE_NUMBER: str = ""
     PRICING_PDF_URL: str = "https://markeye.io/pricing-overview.pdf"
 

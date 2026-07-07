@@ -1,5 +1,6 @@
 import logging
 import os
+import httpx
 from typing import Optional, List
 from app.config import settings
 
@@ -17,15 +18,44 @@ def get_provider(client_config: Optional[dict] = None) -> str:
     if client_config and client_config.get("messaging_provider"):
         provider = client_config["messaging_provider"]
 
+    # Map legacy baileys string to openwa automatically
+    if provider == "baileys":
+        provider = "openwa"
+
     is_production = os.getenv("ENVIRONMENT") == "production"
-    if is_production and provider == "baileys":
+    # Keep guard active only for legacy baileys if it somehow slips through
+    if is_production and provider == "legacy_baileys":
         logger.warning(
-            "⚠️ SECURITY GUARD: Baileys requested in production. "
+            "⚠️ SECURITY GUARD: Legacy Baileys requested in production. "
             "Forcing whatsapp_cloud."
         )
         return "whatsapp_cloud"
 
     return provider
+
+
+async def _call_openwa_api(endpoint: str, payload: dict, method: str = "POST") -> dict | None:
+    """Helper to perform requests on the self-hosted OpenWA API gateway."""
+    url = f"{settings.OPENWA_API_URL.rstrip('/')}/api{endpoint}"
+    headers = {
+        "X-API-Key": settings.OPENWA_API_KEY,
+        "Content-Type": "application/json"
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            if method.upper() == "POST":
+                resp = await client.post(url, headers=headers, json=payload)
+            else:
+                resp = await client.get(url, headers=headers)
+                
+            if resp.status_code in [200, 201]:
+                return resp.json()
+            else:
+                logger.error(f"[OpenWA API] Call failed to {endpoint}: {resp.status_code} — {resp.text}")
+                return None
+    except Exception as e:
+        logger.error(f"[OpenWA API] Connection error: {e}")
+        return None
 
 
 # ─── Text messages ────────────────────────────────────────────────────────────
@@ -41,67 +71,90 @@ async def send_message(
     if provider == "whatsapp_cloud":
         from app import whatsapp_client as cloud
         return await cloud.send_message(phone, text, client_config=client_config)
+    elif provider == "openwa":
+        phone_id = phone.split(':')[-1] if ':' in phone else phone
+        to_jid = f"{phone_id}@c.us" if "@" not in phone_id else phone_id
+        payload = {
+            "sessionId": client_id,
+            "to": to_jid,
+            "text": text
+        }
+        res = await _call_openwa_api("/messages/send-text", payload)
+        if res:
+            return {"status": "sent", "provider": "openwa", "messageId": res.get("id")}
+        return None
     else:
-        from app.baileys_bridge import baileys_bridge
-        return await baileys_bridge.send_message(phone, text, client_id=client_id)
+        try:
+            from app.baileys_bridge import baileys_bridge
+            return await baileys_bridge.send_message(phone, text, client_id=client_id)
+        except ImportError:
+            logger.error("Baileys bridge not available and provider is not OpenWA or Cloud API")
+            return None
 
 
 # ─── Typing indicator ─────────────────────────────────────────────────────────
-# Cloud API: requires message_id (incoming message to reply to)
-# Baileys:   message_id ignored, uses Redis pubsub outbound:typing
 
 async def send_typing_indicator(
     phone: str,
     message_id: str = "",
     client_config: Optional[dict] = None,
 ) -> bool:
-    """
-    Show typing indicator.
-
-    Cloud API: sends status=read + typing_indicator block.
-               Requires message_id — silently skips if missing.
-    Baileys:   publishes to outbound:typing channel (no message_id needed).
-    """
     provider = get_provider(client_config)
     client_id = client_config.get("id") if client_config else None
 
     if provider == "whatsapp_cloud":
         from app import whatsapp_client as cloud
         return await cloud.send_typing_indicator(phone, message_id=message_id, client_config=client_config)
+    elif provider == "openwa":
+        phone_id = phone.split(':')[-1] if ':' in phone else phone
+        to_jid = f"{phone_id}@c.us" if "@" not in phone_id else phone_id
+        payload = {
+            "sessionId": client_id,
+            "to": to_jid,
+            "presence": "composing"
+        }
+        await _call_openwa_api("/messages/send-presence-update", payload)
+        return True
     else:
-        from app.baileys_bridge import baileys_bridge
-        return await baileys_bridge.send_typing_indicator(phone, client_id=client_id)
+        try:
+            from app.baileys_bridge import baileys_bridge
+            return await baileys_bridge.send_typing_indicator(phone, client_id=client_id)
+        except ImportError:
+            return False
 
 
 # ─── Mark as read (blue ticks) ────────────────────────────────────────────────
-# FIX: original signature was (phone, message_id) with no client_config.
-# human_behavior.py calls mark_as_read(phone, message_id, client_config=...).
 
 async def mark_as_read(
     phone: str,
     message_id: str,
     client_config: Optional[dict] = None,
 ) -> bool:
-    """
-    Mark incoming message as read (blue ticks on lead's screen).
-
-    Cloud API: POST /messages with status=read + message_id
-    Baileys:   publishes to outbound:mark_read channel
-    """
     provider = get_provider(client_config)
 
     if provider == "whatsapp_cloud":
         from app import whatsapp_client as cloud
         await cloud.mark_as_read(message_id, client_config=client_config)
         return True
+    elif provider == "openwa":
+        phone_id = phone.split(':')[-1] if ':' in phone else phone
+        to_jid = f"{phone_id}@c.us" if "@" not in phone_id else phone_id
+        payload = {
+            "sessionId": client_config.get("id") if client_config else None,
+            "to": to_jid,
+            "messageId": message_id
+        }
+        await _call_openwa_api("/messages/mark-read", payload)
+        return True
     else:
-        from app.baileys_bridge import baileys_bridge
-        return await baileys_bridge.mark_as_read(phone, message_id)
+        try:
+            from app.baileys_bridge import baileys_bridge
+            return await baileys_bridge.mark_as_read(phone, message_id)
+        except ImportError:
+            return False
 
 
 # ─── Chunked messages ─────────────────────────────────────────────────────────
-# NOTE: human_behavior.deliver_with_human_timing is the preferred path now.
-# This function kept for backward compat (outbound.py, calcom.py still call it).
 
 async def send_chunked_messages(
     phone: str,
@@ -111,12 +164,6 @@ async def send_chunked_messages(
     last_message_ts: float = 0,
     message_id: str = "",
 ) -> None:
-    """
-    Send multiple chunks.
-    For inbound responses: prefer human_behavior.deliver_with_human_timing.
-    For outbound (no incoming message): uses deliver_outbound_sequence.
-    This shim keeps backward compat.
-    """
     from app.human_behavior import deliver_outbound_sequence
     await deliver_outbound_sequence(phone, chunks, client_config=client_config)
 
@@ -140,7 +187,8 @@ async def send_template_message(
         return await cloud.send_template_message(phone, final_template, language_code, components, client_config=client_config)
     else:
         logger.info(
-            "[Router] Baileys requested for template %s. Skipping — awaiting raw fallback.",
+            "[Router] Provider %s requested for template %s. Skipping — awaiting raw fallback.",
+            provider,
             final_template,
         )
         return None
@@ -161,11 +209,26 @@ async def send_media(
     if provider == "whatsapp_cloud":
         logger.warning("[Router] Media via whatsapp_cloud not fully implemented.")
         return None
+    elif provider == "openwa":
+        phone_id = phone.split(':')[-1] if ':' in phone else phone
+        to_jid = f"{phone_id}@c.us" if "@" not in phone_id else phone_id
+        payload = {
+            "sessionId": client_id,
+            "to": to_jid,
+            "url": media_url,
+            "type": media_type,
+            "caption": caption
+        }
+        await _call_openwa_api("/messages/send-media", payload)
+        return {"status": "sent", "provider": "openwa"}
     else:
-        from app.baileys_bridge import baileys_bridge
-        return await baileys_bridge.send_media(
-            phone, media_url, media_type, caption, client_id=client_id
-        )
+        try:
+            from app.baileys_bridge import baileys_bridge
+            return await baileys_bridge.send_media(
+                phone, media_url, media_type, caption, client_id=client_id
+            )
+        except ImportError:
+            return None
 
 
 # ─── Polls ────────────────────────────────────────────────────────────────────
@@ -179,9 +242,23 @@ async def send_poll(
     provider = get_provider(client_config)
     client_id = client_config.get("id") if client_config else None
 
-    if provider == "baileys":
-        from app.baileys_bridge import baileys_bridge
-        return await baileys_bridge.send_poll(phone, question, options, client_id=client_id)
+    if provider == "openwa":
+        phone_id = phone.split(':')[-1] if ':' in phone else phone
+        to_jid = f"{phone_id}@c.us" if "@" not in phone_id else phone_id
+        payload = {
+            "sessionId": client_id,
+            "to": to_jid,
+            "name": question,
+            "options": options
+        }
+        await _call_openwa_api("/messages/send-poll", payload)
+        return {"status": "sent", "provider": "openwa"}
+    elif provider == "baileys":
+        try:
+            from app.baileys_bridge import baileys_bridge
+            return await baileys_bridge.send_poll(phone, question, options, client_id=client_id)
+        except ImportError:
+            return None
     else:
         logger.info("[Router] Polls not supported on Cloud API. Skipping.")
         return None
@@ -198,11 +275,26 @@ async def forward_message(
     provider = get_provider(client_config)
     client_id = client_config.get("id") if client_config else None
 
-    if provider == "baileys":
-        from app.baileys_bridge import baileys_bridge
-        return await baileys_bridge.forward_message(
-            phone, original_msg_id, forward_to, client_id=client_id
-        )
+    if provider == "openwa":
+        phone_id = phone.split(':')[-1] if ':' in phone else phone
+        target_id = forward_to.split(':')[-1] if ':' in forward_to else forward_to
+        target_jid = f"{target_id}@c.us" if "@" not in target_id else target_id
+        
+        payload = {
+            "sessionId": client_id,
+            "to": target_jid,
+            "messageId": original_msg_id
+        }
+        await _call_openwa_api("/messages/forward", payload)
+        return {"status": "forwarded", "provider": "openwa"}
+    elif provider == "baileys":
+        try:
+            from app.baileys_bridge import baileys_bridge
+            return await baileys_bridge.forward_message(
+                phone, original_msg_id, forward_to, client_id=client_id
+            )
+        except ImportError:
+            return None
     else:
         logger.info("[Router] Forwarding not supported on Cloud API.")
         return None

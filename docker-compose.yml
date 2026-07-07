@@ -17,18 +17,25 @@ services:
         reservations:
           memory: 256M
 
-  baileys:
-    build: ./baileys-service
+  openwa:
+    image: ghcr.io/rmyndharis/openwa:latest
+    ports:
+      - "2785:2785"
     env_file:
       - .env
+    environment:
+      - API_MASTER_KEY=${OPENWA_API_KEY:-markeye_openwa_key}
+      - ENGINE_TYPE=whatsapp-web.js
+      - REDIS_ENABLED=true
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_TYPE=sqlite
+      - DATABASE_URL=sqlite:///app/data/openwa.db
+      - WEBHOOK_SSRF_PROTECT=false
     volumes:
-      - baileys_sessions:/app/sessions
+      - openwa_data:/app/data
     restart: unless-stopped
-    deploy:
-      resources:
-        reservations:
-          cpus: '0.4'
-          memory: 384M
+    depends_on:
+      - redis
 
   redis:
     image: redis:alpine
@@ -37,4 +44,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  baileys_sessions:
+  openwa_data:
+

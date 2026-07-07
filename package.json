@@ -1,0 +1,11 @@
+{
+  "name": "markeye-whatsapp-agent-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "heroku-postbuild": "cd baileys-service && npm install"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -24,6 +24,18 @@ def verify_whatsapp_signature(body: bytes, header: str, secret: str) -> bool:
     ).hexdigest()
     return hmac.compare_digest(expected, header)
 
+
+def verify_openwa_signature(body: bytes, header: str, secret: str) -> bool:
+    """Verify that the webhook request came from OpenWA using HMAC-SHA256."""
+    if not header:
+        return False
+    sig = header.split("sha256=")[-1] if "sha256=" in header else header
+    expected = hmac.new(
+        secret.encode("utf-8"), body, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, sig)
+
+
 MAX_INTERRUPT_RETRIES = 2
 
 @router.get("/webhook")
@@ -346,3 +358,119 @@ async def admin_reset_session(request: Request):
         await redis_client.redis.delete(f"generating:{phone}")
         return {"status": "ok"}
     except: return {"status": "error"}
+
+
+@router.post("/webhook/openwa")
+async def openwa_webhook(request: Request, background_tasks: BackgroundTasks):
+    """
+    Receive incoming messages from OpenWA Gateway webhook.
+    """
+    try:
+        import json
+        import time
+
+        # 1. Verify Signature
+        body_bytes = await request.body()
+        signature = request.headers.get("X-OpenWA-Signature", "")
+        if settings.OPENWA_WEBHOOK_SECRET:
+            if not verify_openwa_signature(body_bytes, signature, settings.OPENWA_WEBHOOK_SECRET):
+                logger.warning(f"Invalid OpenWA signature from {request.client.host}")
+                raise HTTPException(status_code=403, detail="Invalid signature")
+
+        payload = json.loads(body_bytes)
+        
+        event = payload.get("event")
+        if event != "message":
+            return {"status": "ignored"}
+            
+        data = payload.get("data", {})
+        if not data:
+            return {"status": "ignored"}
+
+        # Extract fields
+        sender_raw = data.get("from", "")       # JID format: "447700900000@c.us"
+        message_text = data.get("body", "")
+        message_id = data.get("id", "")
+        message_ts = int(data.get("timestamp", time.time()))
+        client_id = payload.get("sessionId") or data.get("sessionId")
+        
+        # Ignore messages sent by ourselves
+        if data.get("self") or data.get("fromMe"):
+            return {"status": "ignored"}
+
+        if not sender_raw or not message_text:
+            return {"status": "ignored"}
+
+        # Normalize phone
+        from app.phone_utils import normalize_phone
+        phone_id = sender_raw.split("@")[0]
+        sender_phone = normalize_phone(phone_id)
+        sender_name = data.get("sender", {}).get("pushname") or data.get("pushname") or "there"
+
+        logger.info(f"[OpenWA Webhook] Message from {sender_name} ({sender_phone}): {message_text[:80]}...")
+
+        # 0. Rate limit: max 3 triggers per phone per 10-second window
+        rate_key = f"ratelimit:{sender_phone}"
+        count = await redis_client.redis.incr(rate_key)
+        if count == 1:
+            await redis_client.redis.expire(rate_key, 10)
+        if count > 3:
+            logger.warning("[OpenWA Webhook] Rate limit hit for %s — dropping message", sender_phone)
+            return {"status": "rate_limited"}
+
+        # 1. Dedup Check
+        dedup_key = f"dedup:{message_id}"
+        if await redis_client.redis.get(dedup_key):
+            logger.info(f"Duplicate message {message_id}, ignoring")
+            return {"status": "duplicate"}
+        await redis_client.redis.set(dedup_key, "1", ex=86400)
+
+        # 2. Staleness check
+        message_age = int(time.time()) - message_ts
+        if message_ts > 0 and message_age > 300:
+            logger.info(f"Stale message ignored from {sender_phone}, age: {message_age}s")
+            return {"status": "ignored", "reason": "stale"}
+
+        # 3. Generation Cleanup
+        await redis_client.check_and_clear_stale_generation(sender_phone)
+
+        # 4. CLOSED State Check
+        session = await redis_client.get_session(sender_phone)
+        cmd_check = message_text.strip().lower()
+        
+        if session and session.get("state") == ConversationState.CLOSED and not cmd_check.startswith(("/reset", "#reset")):
+            last_updated = session.get("last_updated")
+            if last_updated:
+                from datetime import datetime
+                try:
+                    lu_dt = datetime.fromisoformat(last_updated.replace("Z", "+00:00"))
+                    diff = (datetime.utcnow().replace(tzinfo=None) - lu_dt.replace(tzinfo=None)).total_seconds()
+                    if diff < 86400:  # Cooldown
+                        logger.info(f"[OpenWA Webhook] {sender_phone} is CLOSED within 24h. Ignoring.")
+                        return {"status": "ignored", "reason": "closed_state"}
+                except Exception as e:
+                    logger.warning(f"[OpenWA Webhook] CLOSED cooldown check failed: {e}")
+
+        # === BUFFER THE MESSAGE ===
+        batch_id, is_first = await redis_client.buffer_message(sender_phone, message_text)
+        await redis_client.redis.set(f"last_msg_id:{sender_phone}", message_id, ex=300)
+        await redis_client.redis.set(f"last_name:{sender_phone}", sender_name, ex=300)
+        if client_id:
+            await redis_client.redis.set(f"client_id:{sender_phone}", client_id, ex=300)
+
+        # Fire delayed processor
+        background_tasks.add_task(delayed_buffer_process, sender_phone, batch_id, message_ts, client_id)
+        
+        if is_first:
+            background_tasks.add_task(hard_max_check, sender_phone, message_ts, client_id)
+        
+        background_tasks.add_task(background_tracker_log, sender_phone, sender_name, message_text, client_id)
+        
+        return {"status": "ok"}
+
+    except Exception as e:
+        logger.error(f"OpenWA Webhook error: {e}", exc_info=True)
+        import sentry_sdk
+        sentry_sdk.capture_exception(e)
+        return {"status": "error"}
+

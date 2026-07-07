@@ -89,12 +89,18 @@ from app.middleware import TelemetryMiddleware
 app.add_middleware(TelemetryMiddleware)
 
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
+
+@app.get("/admin")
+async def admin_redirect():
+    return RedirectResponse(url="/admin/dashboard/")
+
 # Try to serve the premium dashboard if built, fallback to simple dashboard
 dist_path = "../after5-agent-front/dist"
 if os.path.exists(dist_path):
-    app.mount("/admin", StaticFiles(directory=dist_path, html=True), name="admin")
+    app.mount("/admin/dashboard", StaticFiles(directory=dist_path, html=True), name="admin")
 else:
-    app.mount("/admin", StaticFiles(directory="dashboard", html=True), name="admin")
+    app.mount("/admin/dashboard", StaticFiles(directory="dashboard", html=True), name="admin")
 
 app.include_router(webhook_router)
 app.include_router(outbound_router)
