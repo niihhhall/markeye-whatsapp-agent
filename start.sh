@@ -3,7 +3,7 @@
 # Start the Baileys WhatsApp service in the background
 echo "🚀 Starting Baileys WhatsApp Service..."
 cd baileys-service
-node index.js &
+PORT=3001 node index.js &
 cd ..
 
 # Start the FastAPI service in the foreground
