@@ -129,35 +129,50 @@ class ClientManager:
                 continue
 
             # Handle OpenWA / Baileys integration
-            logger.info(f"[ClientManager] Starting OpenWA session for {client.get('business_name')} ({client_id})")
-            try:
-                async with httpx.AsyncClient() as http_client:
-                    # 1. Register Webhook
-                    if settings.OPENWA_WEBHOOK_URL:
-                        webhook_payload = {
-                            "url": settings.OPENWA_WEBHOOK_URL,
-                            "events": ["message"],
-                            "secret": settings.OPENWA_WEBHOOK_SECRET
-                        }
+            if provider == "baileys":
+                logger.info(f"[ClientManager] Starting Baileys session for {client.get('business_name')} ({client_id})")
+                try:
+                    async with httpx.AsyncClient() as http_client:
                         await http_client.post(
-                            f"{openwa_api_url}/api/webhooks",
-                            headers=headers,
-                            json=webhook_payload,
+                            f"{settings.BAILEYS_API_URL}/sessions/start",
+                            json={
+                                "sessionId": client_id,
+                                "phoneNumber": whatsapp_number
+                            },
                             timeout=5.0
                         )
-                    
-                    # 2. Start Session
-                    await http_client.post(
-                        f"{openwa_api_url}/api/sessions/start",
-                        headers=headers,
-                        json={
-                            "sessionId": client_id,
-                            "phoneNumber": whatsapp_number
-                        },
-                        timeout=5.0
-                    )
-            except Exception as e:
-                logger.error(f"[ClientManager] Failed to signal OpenWA for client {client_id}: {e}")
+                except Exception as e:
+                    logger.error(f"[ClientManager] Failed to signal Baileys for client {client_id}: {e}")
+            else:
+                logger.info(f"[ClientManager] Starting OpenWA session for {client.get('business_name')} ({client_id})")
+                try:
+                    async with httpx.AsyncClient() as http_client:
+                        # 1. Register Webhook
+                        if settings.OPENWA_WEBHOOK_URL:
+                            webhook_payload = {
+                                "url": settings.OPENWA_WEBHOOK_URL,
+                                "events": ["message"],
+                                "secret": settings.OPENWA_WEBHOOK_SECRET
+                            }
+                            await http_client.post(
+                                f"{openwa_api_url}/api/webhooks",
+                                headers=headers,
+                                json=webhook_payload,
+                                timeout=5.0
+                            )
+                        
+                        # 2. Start Session
+                        await http_client.post(
+                            f"{openwa_api_url}/api/sessions/start",
+                            headers=headers,
+                            json={
+                                "sessionId": client_id,
+                                "phoneNumber": whatsapp_number
+                            },
+                            timeout=5.0
+                        )
+                except Exception as e:
+                    logger.error(f"[ClientManager] Failed to signal OpenWA for client {client_id}: {e}")
 
     def invalidate_cache(self, client_id: Optional[str] = None):
         """Clear cache for specific client or all."""
