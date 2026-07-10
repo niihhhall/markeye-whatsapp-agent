@@ -32,9 +32,10 @@ class Settings(BaseSettings):
     # Fireworks AI (Primary chain: primary -> secondary -> fallback)
     FIREWORKS_API_KEY: str = ""
     FIREWORKS_BASE_URL: str = "https://api.fireworks.ai/inference/v1"
-    FIREWORKS_PRIMARY_MODEL: str = "accounts/fireworks/models/glm-5p2"
-    FIREWORKS_SECONDARY_MODEL: str = "accounts/fireworks/models/deepseek-v4-pro"
-    FIREWORKS_FALLBACK_MODEL: str = "accounts/fireworks/models/kimi-k2p6"
+    # Ordered fastest-first (benchmarked): deepseek-v4-pro has the best cold+warm latency.
+    FIREWORKS_PRIMARY_MODEL: str = "accounts/fireworks/models/deepseek-v4-pro"
+    FIREWORKS_SECONDARY_MODEL: str = "accounts/fireworks/models/kimi-k2p6"
+    FIREWORKS_FALLBACK_MODEL: str = "accounts/fireworks/models/glm-5p2"
 
     # Legacy OpenRouter (Optional Fallback)
     OPENROUTER_API_KEY: str = ""
