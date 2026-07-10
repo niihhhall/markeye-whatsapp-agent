@@ -9,13 +9,13 @@ logger = logging.getLogger(__name__)
 class SmartLLMRouter:
     def __init__(self):
         """
-        Initializes OpenAI-compatible clients for Groq, Gemini, and Cerebras.
-        Fallback order: Groq -> Gemini -> Cerebras -> (Optional) OpenRouter.
+        Fireworks AI is the ONLY provider. Three models on one key form the
+        fallback chain: primary -> secondary -> fallback.
+        (glm-5p2 -> deepseek-v4-pro -> kimi-k2p6)
         """
         self.providers = []
 
-        # ── Fireworks AI (Primary chain) ──────────────────────────────────
-        # Three models on one key: primary -> secondary -> fallback.
+        # ── Fireworks AI (only provider) ──────────────────────────────────
         if settings.FIREWORKS_API_KEY:
             fw_client = AsyncOpenAI(
                 api_key=settings.FIREWORKS_API_KEY,
@@ -36,38 +36,8 @@ class SmartLLMRouter:
                 "client": fw_client,
                 "model": settings.FIREWORKS_FALLBACK_MODEL,
             })
-
-        # ── Groq (emergency safety net — only if Fireworks is fully down) ──
-        if settings.GROQ_API_KEY:
-            self.providers.append({
-                "name": "Groq",
-                "client": AsyncOpenAI(api_key=settings.GROQ_API_KEY, base_url="https://api.groq.com/openai/v1"),
-                "model": settings.GROQ_MODEL
-            })
-
-        # ── Gemini (extra fallback) ───────────────────────────────────────
-        if settings.GEMINI_API_KEY:
-            self.providers.append({
-                "name": "Gemini",
-                "client": AsyncOpenAI(api_key=settings.GEMINI_API_KEY, base_url="https://generativelanguage.googleapis.com/v1beta/openai/"),
-                "model": settings.GEMINI_MODEL
-            })
-
-        # ── Cerebras (extra fallback) ─────────────────────────────────────
-        if settings.CEREBRAS_API_KEY:
-            self.providers.append({
-                "name": "Cerebras",
-                "client": AsyncOpenAI(api_key=settings.CEREBRAS_API_KEY, base_url="https://api.cerebras.ai/v1"),
-                "model": settings.CEREBRAS_MODEL
-            })
-
-        # ── OpenRouter (legacy fallback) ──────────────────────────────────
-        if settings.OPENROUTER_API_KEY:
-            self.providers.append({
-                "name": "OpenRouter",
-                "client": AsyncOpenAI(api_key=settings.OPENROUTER_API_KEY, base_url="https://openrouter.ai/api/v1"),
-                "model": "openai/gpt-4o-mini"
-            })
+        else:
+            logger.error("[SmartLLMRouter] FIREWORKS_API_KEY not set — no LLM providers configured.")
 
     async def generate_completion(
         self,
