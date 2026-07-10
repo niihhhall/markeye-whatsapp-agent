@@ -32,10 +32,12 @@ def _get_headers(config: dict) -> dict:
     }
 
 async def send_message(to: str, body: str, client_config: Optional[dict] = None) -> dict | None:
-    """Send a text message via WhatsApp Cloud API."""
-    if not client_config:
-        logger.error("[CloudAPI] No client_config provided for send_message")
-        return None
+    """Send a text message via WhatsApp Cloud API.
+
+    Falls back to the app-level settings (WHATSAPP_PHONE_NUMBER_ID /
+    WHATSAPP_ACCESS_TOKEN) when no per-client config is provided.
+    """
+    client_config = client_config or {}
 
     payload = {
         "messaging_product": "whatsapp",
@@ -119,8 +121,7 @@ async def send_chunked_messages(
 
 async def send_template_message(to: str, template_name: str, language_code: str = "en", components: list = None, client_config: Optional[dict] = None) -> dict | None:
     """Send a WhatsApp template message."""
-    if not client_config:
-        return None
+    client_config = client_config or {}
 
     payload = {
         "messaging_product": "whatsapp",
@@ -155,9 +156,10 @@ async def send_typing_indicator(to: str, message_id: str = "", client_config: Op
     """
     Send a typing indicator using the correct WhatsApp Cloud API format.
     """
-    if not message_id or not client_config:
-        logger.debug(f"[Typing] Skipped — missing id or config for {to}")
+    if not message_id:
+        logger.debug(f"[Typing] Skipped — missing message_id for {to}")
         return False
+    client_config = client_config or {}
 
     payload = {
         "messaging_product": "whatsapp",
@@ -180,8 +182,9 @@ async def send_typing_indicator(to: str, message_id: str = "", client_config: Op
 
 async def mark_as_read(message_id: str, client_config: Optional[dict] = None) -> None:
     """Mark a message as read (blue ticks)."""
-    if not message_id or not client_config:
+    if not message_id:
         return
+    client_config = client_config or {}
 
     payload = {
         "messaging_product": "whatsapp",

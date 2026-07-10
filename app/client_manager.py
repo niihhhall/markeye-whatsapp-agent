@@ -108,6 +108,13 @@ class ClientManager:
         import httpx
         from app.config import settings
 
+        # When running on the official WhatsApp Cloud API, inbound arrives via the
+        # Meta webhook — there is no Baileys/OpenWA session to start. Skip entirely
+        # to avoid the Baileys link/reconnect churn.
+        if (settings.MESSAGING_PROVIDER or "").lower() == "whatsapp_cloud":
+            logger.info("[ClientManager] MESSAGING_PROVIDER=whatsapp_cloud — skipping Baileys/OpenWA session init (Cloud API uses webhooks).")
+            return
+
         logger.info("[ClientManager] 🚀 Initializing all clients from Supabase...")
         clients = await self.list_clients()
         
