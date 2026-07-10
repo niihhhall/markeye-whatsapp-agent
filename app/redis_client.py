@@ -142,7 +142,14 @@ class RedisClient:
             await self.redis.set(f"generating:{phone}", "1", ex=120)
             await self.redis.set(f"generating_ts:{phone}", str(time.time()), ex=120)
         except Exception as e:
-            logger.error(f"[Redis] set/clear_generating failed: {e}")
+            logger.error(f"[Redis] set_generating failed: {e}")
+
+    async def clear_generating(self, phone: str):
+        """Clear the in-progress generation flags for a phone."""
+        try:
+            await self.redis.delete(f"generating:{phone}", f"generating_ts:{phone}")
+        except Exception as e:
+            logger.error(f"[Redis] clear_generating failed: {e}")
 
     async def is_generating(self, phone: str) -> bool:
         try:

@@ -13,32 +13,55 @@ class SmartLLMRouter:
         Fallback order: Groq -> Gemini -> Cerebras -> (Optional) OpenRouter.
         """
         self.providers = []
-        
-        # 1. Groq (Primary)
+
+        # ── Fireworks AI (Primary chain) ──────────────────────────────────
+        # Three models on one key: primary -> secondary -> fallback.
+        if settings.FIREWORKS_API_KEY:
+            fw_client = AsyncOpenAI(
+                api_key=settings.FIREWORKS_API_KEY,
+                base_url=settings.FIREWORKS_BASE_URL,
+            )
+            self.providers.append({
+                "name": "Fireworks-Primary",
+                "client": fw_client,
+                "model": settings.FIREWORKS_PRIMARY_MODEL,
+            })
+            self.providers.append({
+                "name": "Fireworks-Secondary",
+                "client": fw_client,
+                "model": settings.FIREWORKS_SECONDARY_MODEL,
+            })
+            self.providers.append({
+                "name": "Fireworks-Fallback",
+                "client": fw_client,
+                "model": settings.FIREWORKS_FALLBACK_MODEL,
+            })
+
+        # ── Groq (emergency safety net — only if Fireworks is fully down) ──
         if settings.GROQ_API_KEY:
             self.providers.append({
                 "name": "Groq",
                 "client": AsyncOpenAI(api_key=settings.GROQ_API_KEY, base_url="https://api.groq.com/openai/v1"),
                 "model": settings.GROQ_MODEL
             })
-            
-        # 2. Gemini (Secondary)
+
+        # ── Gemini (extra fallback) ───────────────────────────────────────
         if settings.GEMINI_API_KEY:
             self.providers.append({
                 "name": "Gemini",
                 "client": AsyncOpenAI(api_key=settings.GEMINI_API_KEY, base_url="https://generativelanguage.googleapis.com/v1beta/openai/"),
                 "model": settings.GEMINI_MODEL
             })
-            
-        # 3. Cerebras (Fallback)
+
+        # ── Cerebras (extra fallback) ─────────────────────────────────────
         if settings.CEREBRAS_API_KEY:
             self.providers.append({
                 "name": "Cerebras",
                 "client": AsyncOpenAI(api_key=settings.CEREBRAS_API_KEY, base_url="https://api.cerebras.ai/v1"),
                 "model": settings.CEREBRAS_MODEL
             })
-            
-        # 4. OpenRouter (Legacy Fallback)
+
+        # ── OpenRouter (legacy fallback) ──────────────────────────────────
         if settings.OPENROUTER_API_KEY:
             self.providers.append({
                 "name": "OpenRouter",
@@ -81,7 +104,13 @@ class SmartLLMRouter:
         for provider in self.providers:
             provider_name = provider["name"]
             client = provider["client"]
-            model = model_override or provider["model"]
+            # A model name is provider-specific. Never force one provider's model
+            # (e.g. a Gemini model) onto another provider — that caused every
+            # fallback to 404. Always use each provider's own configured model.
+            # model_override is only honored when it matches this provider's model.
+            model = provider["model"]
+            if model_override and model_override == provider["model"]:
+                model = model_override
             
             try:
                 start_time = time.time()

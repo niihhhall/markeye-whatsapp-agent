@@ -2,10 +2,22 @@ import logging
 import asyncio
 import random
 import httpx
+from typing import Optional
 from app.config import settings
 from app.chunker import calculate_typing_delay
 
 logger = logging.getLogger(__name__)
+
+
+def _to_wa_phone(to: str) -> str:
+    """Normalize an internal phone (e.g. 'whatsapp:+919...') to a Meta wa_id
+    (digits only, no 'whatsapp:' prefix, no '+'). Returns '' for empty input."""
+    if not to:
+        return ""
+    # Drop any 'whatsapp:' prefix, then keep digits only.
+    raw = to.split(":")[-1]
+    return "".join(ch for ch in raw if ch.isdigit())
+
 
 def _get_base_url(config: dict) -> str:
     version = config.get("whatsapp_api_version", settings.WHATSAPP_API_VERSION or "v19.0")

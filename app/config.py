@@ -23,11 +23,18 @@ class Settings(BaseSettings):
 
     # Gemini (Secondary)
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-1.5-flash"
+    GEMINI_MODEL: str = "gemini-2.0-flash"
 
     # Cerebras (Fallback)
     CEREBRAS_API_KEY: str = ""
-    CEREBRAS_MODEL: str = "llama3.1-70b"
+    CEREBRAS_MODEL: str = "gpt-oss-120b"
+
+    # Fireworks AI (Primary chain: primary -> secondary -> fallback)
+    FIREWORKS_API_KEY: str = ""
+    FIREWORKS_BASE_URL: str = "https://api.fireworks.ai/inference/v1"
+    FIREWORKS_PRIMARY_MODEL: str = "accounts/fireworks/models/glm-5p2"
+    FIREWORKS_SECONDARY_MODEL: str = "accounts/fireworks/models/deepseek-v4-pro"
+    FIREWORKS_FALLBACK_MODEL: str = "accounts/fireworks/models/kimi-k2p6"
 
     # Legacy OpenRouter (Optional Fallback)
     OPENROUTER_API_KEY: str = ""

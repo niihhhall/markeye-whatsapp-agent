@@ -110,6 +110,8 @@ class BaileysBridge:
         """Publish a text message to the Baileys outbound channel."""
         # phone format: "whatsapp:+44..." -> "44...@s.whatsapp.net"
         phone_id = phone.split(':')[-1] if ':' in phone else phone
+        if not client_id:
+            client_id = await redis_client.redis.get(f"client_id:{phone}")
         payload = {
             "sessionId": client_id,
             "to": f"{phone_id}@s.whatsapp.net",
@@ -130,6 +132,8 @@ class BaileysBridge:
     async def send_typing_indicator(self, phone: str, client_id: Optional[str] = None):
         """Show typing indicator in Baileys."""
         phone_id = phone.split(':')[-1] if ':' in phone else phone
+        if not client_id:
+            client_id = await redis_client.redis.get(f"client_id:{phone}")
         payload = {
             "sessionId": client_id,
             "to": f"{phone_id}@s.whatsapp.net"

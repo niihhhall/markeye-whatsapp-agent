@@ -18,9 +18,9 @@ def get_provider(client_config: Optional[dict] = None) -> str:
     if client_config and client_config.get("messaging_provider"):
         provider = client_config["messaging_provider"]
 
-    # Map legacy baileys string to openwa automatically
-    if provider == "baileys":
-        provider = "openwa"
+    # "baileys" routes to the in-process Baileys bridge (Redis pub/sub) via the
+    # else-branch of each send_* function. Do NOT remap to openwa — the OpenWA
+    # gateway is not part of this deployment.
 
     is_production = os.getenv("ENVIRONMENT") == "production"
     # Keep guard active only for legacy baileys if it somehow slips through

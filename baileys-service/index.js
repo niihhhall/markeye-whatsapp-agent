@@ -150,10 +150,13 @@ class SessionManager {
         this.sessions.set(sessionId, { sock, status: 'connecting', qr: null, pairingPhone });
 
         // Pairing Code Support
-        if (!sock.authState.creds.registered && pairingPhone) {
+        // Sanitize to digits only — WhatsApp requestPairingCode rejects any
+        // formatting (e.g. a stored "whatsapp:+918141253252" must become "918141253252").
+        const cleanPairingPhone = pairingPhone ? String(pairingPhone).replace(/[^0-9]/g, '') : '';
+        if (!sock.authState.creds.registered && cleanPairingPhone) {
             setTimeout(async () => {
                 try {
-                    const code = await sock.requestPairingCode(pairingPhone);
+                    const code = await sock.requestPairingCode(cleanPairingPhone);
                     logger.info(`[SessionManager] Pairing Code for ${sessionId}: ${code}`);
                     // Save pairing code to redis for dashboard visibility
                     await redis.set(`baileys:pairing_code:${sessionId}`, code, 'EX', 300);
@@ -220,6 +223,17 @@ class SessionManager {
 
                 if (!text) continue;
 
+                // Remember the exact origin JID (handles @lid vs @s.whatsapp.net)
+                // so outbound replies target the same JID verbatim.
+                try {
+                    const senderNum = (msg.key.remoteJid || '').split('@')[0];
+                    if (senderNum) {
+                        await redis.set(`baileys:jid:${senderNum}`, msg.key.remoteJid, 'EX', 86400);
+                    }
+                } catch (e) {
+                    logger.warn(`[Inbound] Failed to cache origin JID: ${e.message}`);
+                }
+
                 const payload = {
                     sessionId: sessionId, // CRITICAL: Tag with sessionId
                     from: msg.key.remoteJid,
@@ -259,6 +273,27 @@ const manager = new SessionManager();
 // OUTBOUND ROUTING (Redis Pub/Sub)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Resolve the correct WhatsApp JID to send to.
+ * The Python side sends targets like "+114997866815646@s.whatsapp.net", but the
+ * real chat may live on "@lid". We strip the leading "+", and prefer the exact
+ * origin JID cached on inbound (baileys:jid:{num}) so replies reach the sender.
+ */
+async function resolveJid(to) {
+    if (!to) return to;
+    const at = to.indexOf('@');
+    const rawNum = (at >= 0 ? to.slice(0, at) : to);
+    const num = rawNum.replace(/[^0-9]/g, '');
+    const domain = at >= 0 ? to.slice(at + 1) : '';
+    try {
+        const stored = await redis.get(`baileys:jid:${num}`);
+        if (stored) return stored;
+    } catch (e) {
+        logger.warn(`[Outbound] JID cache lookup failed: ${e.message}`);
+    }
+    return `${num}@${domain || 's.whatsapp.net'}`;
+}
+
 subscriber.psubscribe('outbound*').catch(err => logger.error('[RedisSub] Error:', err));
 
 subscriber.on('pmessage', async (pattern, channel, message) => {
@@ -278,22 +313,23 @@ subscriber.on('pmessage', async (pattern, channel, message) => {
         }
 
         const sock = session.sock;
+        const jid = await resolveJid(data.to);
 
         if (channel === 'outbound') {
-            await sock.sendMessage(data.to, { text: data.message });
+            await sock.sendMessage(jid, { text: data.message });
         } else if (channel === 'outbound:media') {
             const mediaType = data.type === 'document' ? 'document' : data.type === 'image' ? 'image' : 'audio';
             const payload = {};
             payload[mediaType] = { url: data.url };
             if (data.type === 'document') payload.mimetype = 'application/pdf';
             if (data.caption) payload.caption = data.caption;
-            await sock.sendMessage(data.to, payload);
+            await sock.sendMessage(jid, payload);
         } else if (channel === 'outbound:poll') {
-            await sock.sendMessage(data.to, { poll: { name: data.question, values: data.options, selectableCount: 1 } });
+            await sock.sendMessage(jid, { poll: { name: data.question, values: data.options, selectableCount: 1 } });
         } else if (channel === 'outbound:mark_read') {
-            await sock.readMessages([{ remoteJid: data.to, id: data.messageId }]);
+            await sock.readMessages([{ remoteJid: jid, id: data.messageId }]);
         } else if (channel === 'outbound:typing') {
-            await sock.sendPresenceUpdate('composing', data.to);
+            await sock.sendPresenceUpdate('composing', jid);
         }
     } catch (err) {
         logger.error(`[Outbound] Error routing message:`, err.message);
