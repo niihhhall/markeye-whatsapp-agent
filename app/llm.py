@@ -1,6 +1,7 @@
 import os
 import time
 import httpx
+import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from openai import AsyncOpenAI
@@ -13,6 +14,8 @@ from app.redis_client import redis_client
 from app.llm_router import llm_router
 from app.middleware import log_llm_call
 import json
+
+logger = logging.getLogger(__name__)
 
 tracker = MarkTracker()
 
