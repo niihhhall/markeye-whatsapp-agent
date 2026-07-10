@@ -340,7 +340,8 @@ class LLMClient:
         # 4. Sliding Window & Summarization (V8)
         full_history = session.get("history", [])
         MAX_CONTEXT = 10
-        
+        lead_id = lead_data.get("id") or lead_data.get("lead_id") or "unknown"
+
         if len(full_history) > MAX_CONTEXT:
             logger.info(f"[LLM] 💨 History > {MAX_CONTEXT}. Summarizing older turns for {lead_id}...")
             
