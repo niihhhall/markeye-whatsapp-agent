@@ -13,6 +13,7 @@ from app.redis_client import redis_client
 
 from app.llm_router import llm_router
 from app.middleware import log_llm_call
+from app import context_assembler
 import json
 
 logger = logging.getLogger(__name__)
@@ -174,14 +175,30 @@ class LLMClient:
         client_config: Optional[dict] = None
     ) -> List[Dict[str, str]]:
         """Builds the full LLM context using client_prompt or V4 system prompt."""
-        # Multi-tenant: load client specific prompt or fallback to file
+        # Prompt source (ADR 0001 Phase 2). Preference order:
+        #   1) Layered assembler (modular, selectively-loaded) — cuts tokens ~60%.
+        #   2) Client-specific DB prompt (legacy monolith) — fallback.
+        #   3) Bundled prompts/system_prompt.txt — last resort.
+        # Any assembler failure falls through to the monolith so a live reply is
+        # never blocked (see docs/adr/0001-layered-context-architecture.md).
         core_prompt = ""
-        if client_config and client_config.get("system_prompt"):
-            core_prompt = client_config.get("system_prompt")
-        else:
-            prompt_path = os.path.join(os.getcwd(), "prompts", "system_prompt.txt")
-            with open(prompt_path, "r", encoding="utf-8") as f:
-                core_prompt = f.read()
+        try:
+            if settings.USE_LAYERED_CONTEXT and context_assembler.layers_available():
+                core_prompt = context_assembler.assemble_full_prompt(
+                    message, phase=str(session.get("state", ""))
+                )
+                logger.info("[LLM] Using layered context (%d chars)", len(core_prompt))
+        except Exception as e:
+            logger.error("[LLM] Layered assembly failed, falling back to monolith: %s", e)
+            core_prompt = ""
+
+        if not core_prompt:
+            if client_config and client_config.get("system_prompt"):
+                core_prompt = client_config.get("system_prompt")
+            else:
+                prompt_path = os.path.join(os.getcwd(), "prompts", "system_prompt.txt")
+                with open(prompt_path, "r", encoding="utf-8") as f:
+                    core_prompt = f.read()
             
         industry_context = ""
         industry = (lead_data.get("industry") or "").lower()

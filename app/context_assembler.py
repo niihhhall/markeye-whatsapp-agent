@@ -41,6 +41,24 @@ KB_KEYWORDS = [
     "build time", "how long", "running cost", "refund", "guarantee",
 ]
 
+# Runtime context block — holds the per-conversation placeholders that
+# build_context() substitutes at call time. The legacy monolith carried this
+# inline; the layer files don't, so the assembler appends it. Conversation
+# history is NOT here — it's appended as the message list by build_context.
+RUNTIME_CONTEXT_TEMPLATE = (
+    "═══ CURRENT CONVERSATION CONTEXT ═══\n"
+    "Lead Name: {{lead_name}}\n"
+    "Lead Company: {{lead_company}}\n"
+    "Lead Industry: {{lead_industry}}\n"
+    "Company Summary: {{lead_company_summary}}\n"
+    "Business: {{business_name}}\n"
+    "Current State: {{current_state}}\n"
+    "Scoring Status: {{scoring_status}}\n"
+    "Current Date/Time: {{current_datetime}}\n"
+    "Booking Link: {{booking_link}}\n\n"
+    "Scoring status values: continue_discovery, push_for_booking, escalate_to_human. Follow them."
+)
+
 _cache: dict[str, str] = {}
 
 
@@ -94,3 +112,9 @@ def assemble_base_prompt(message: str, phase: str = "", include_knowledge: Optio
             parts.insert(len(parts) - 1, kb)
 
     return "\n\n".join(parts)
+
+
+def assemble_full_prompt(message: str, phase: str = "", include_knowledge: Optional[bool] = None) -> str:
+    """Base layers + the runtime context block (with placeholders intact).
+    This is what build_context() uses as the core prompt before substitution."""
+    return assemble_base_prompt(message, phase, include_knowledge) + "\n\n" + RUNTIME_CONTEXT_TEMPLATE

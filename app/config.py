@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     CEREBRAS_API_KEY: str = ""
     CEREBRAS_MODEL: str = "gpt-oss-120b"
 
+    # Layered context assembler (ADR 0001 Phase 2). Set to false in Heroku
+    # config vars to instantly revert to the monolith prompt (no redeploy).
+    USE_LAYERED_CONTEXT: bool = True
+
     # Fireworks AI (Primary chain: primary -> secondary -> fallback)
     FIREWORKS_API_KEY: str = ""
     FIREWORKS_BASE_URL: str = "https://api.fireworks.ai/inference/v1"

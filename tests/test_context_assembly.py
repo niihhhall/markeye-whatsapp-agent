@@ -48,3 +48,28 @@ def test_knowledge_layer_saves_tokens_when_omitted():
     with_kb = ca.assemble_base_prompt("pricing", include_knowledge=True)
     without_kb = ca.assemble_base_prompt("pricing", include_knowledge=False)
     assert len(without_kb) < len(with_kb)
+
+
+# ─── full prompt: runtime context block must carry the placeholders ─────────────
+
+def test_full_prompt_has_runtime_context_placeholders():
+    out = ca.assemble_full_prompt("hey", include_knowledge=False)
+    # These MUST be present so build_context can substitute the lead's details.
+    for ph in ("{{lead_name}}", "{{current_state}}", "{{scoring_status}}",
+               "{{booking_link}}", "{{business_name}}"):
+        assert ph in out, f"missing placeholder {ph}"
+    assert "CURRENT CONVERSATION CONTEXT" in out
+
+
+def test_full_prompt_identity_first_and_context_last():
+    out = ca.assemble_full_prompt("tell me about pricing")
+    assert out.lstrip().startswith("═══ IDENTITY")
+    # Runtime context is appended at the very end.
+    assert out.rstrip().endswith("Follow them.")
+
+
+def test_substitution_fills_runtime_block():
+    # Mirrors what build_context does — prove placeholders actually resolve.
+    out = ca.assemble_full_prompt("hi", include_knowledge=False)
+    filled = out.replace("{{lead_name}}", "Nihal").replace("{{business_name}}", "Markeye")
+    assert "Nihal" in filled and "{{lead_name}}" not in filled
