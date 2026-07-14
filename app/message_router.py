@@ -1,31 +1,11 @@
 import logging
 import os
-import re
 import httpx
 from typing import Optional, List
 from app.config import settings
+from app import output_guard
 
 logger = logging.getLogger(__name__)
-
-# Deterministic dash removal — Mark must NEVER send em/en dashes (bot tell).
-# The prompt bans them, but LLMs slip, so we strip them from every outgoing
-# message. Single hyphens inside words/URLs (e.g. "free-discovery-call") are
-# left intact — only dash-as-punctuation forms are replaced with a comma.
-_DASH_SUBS = [
-    (re.compile(r"\s*—\s*"), ", "),      # em dash
-    (re.compile(r"\s*–\s*"), ", "),      # en dash
-    (re.compile(r"\s*--+\s*"), ", "),    # double (or more) hyphen used as a dash
-    (re.compile(r"\s+-\s+"), ", "),      # spaced hyphen used as a dash
-]
-
-
-def _sanitize_dashes(text: str) -> str:
-    """Replace dash-as-punctuation with commas. Leaves hyphenated words/URLs alone."""
-    if not text:
-        return text
-    for pattern, repl in _DASH_SUBS:
-        text = pattern.sub(repl, text)
-    return text
 
 
 def get_provider(client_config: Optional[dict] = None) -> str:
@@ -86,7 +66,8 @@ async def send_message(
     text: str,
     client_config: Optional[dict] = None,
 ) -> dict | None:
-    text = _sanitize_dashes(text)
+    text = output_guard.sanitize_outgoing(text)
+    output_guard.log_violations(phone, text)
     provider = get_provider(client_config)
     client_id = client_config.get("id") if client_config else None
 
