@@ -1,6 +1,6 @@
 # ADR 0002 — Agent Harness Hardening & Eval Harness
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-07-14) — Option B; initial eval harness shipped (`tests/test_output_guard.py`, `app/output_guard.py`)
 - **Date:** 2026-07-14
 - **Owner:** Engineering (CTO advisory)
 - **Deciders:** Founder, Engineering
