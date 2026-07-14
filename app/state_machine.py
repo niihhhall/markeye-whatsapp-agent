@@ -71,7 +71,7 @@ async def classify_stage_with_llm(
         result = await llm_router.generate_completion(
             messages=[{"role": "user", "content": prompt}],
             model_override=settings.GEMINI_MODEL,
-            timeout=6.0,  # Changed from 3.0 — Gemini needs headroom
+            timeout=10.0,  # Raised from 6s — Fireworks reasoning models need headroom under load
         )
         stage_str = result["content"].strip().upper()
 
