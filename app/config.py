@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     # config vars to instantly revert to the monolith prompt (no redeploy).
     USE_LAYERED_CONTEXT: bool = True
 
+    # Structured conversation memory (ADR 0003 Phase 3). When true, build_context
+    # injects a compact structured lead_memory block and a background distill step
+    # keeps it current. Default off until validated; flip in Heroku config vars to
+    # enable/revert with no redeploy.
+    USE_STRUCTURED_MEMORY: bool = False
+
     # Fireworks AI (Primary chain: primary -> secondary -> fallback)
     FIREWORKS_API_KEY: str = ""
     FIREWORKS_BASE_URL: str = "https://api.fireworks.ai/inference/v1"

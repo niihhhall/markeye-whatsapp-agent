@@ -518,4 +518,13 @@ async def persist_session_node(state: GraphState) -> dict:
         handle_bant_extraction(phone, message, session["history"], client_config=client_config)
     )
 
+    # Background: structured lead-memory distill (ADR 0003 Phase 3).
+    # No-ops instantly when USE_STRUCTURED_MEMORY is off; never blocks the reply.
+    from app.config import settings as _settings
+    if _settings.USE_STRUCTURED_MEMORY:
+        from app.lead_memory import distill_and_update
+        asyncio.create_task(
+            distill_and_update(phone, message, response_text, client_config=client_config)
+        )
+
     return {"session": session}

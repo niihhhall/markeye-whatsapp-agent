@@ -353,13 +353,34 @@ class LLMClient:
             system_prompt = system_prompt.replace(key, str(value))
 
         messages = [{"role": "system", "content": system_prompt}]
-        
+
+        # ── Structured lead memory (ADR 0003 Phase 3) ────────────────────────
+        # When enabled, inject a compact structured record of the lead's known
+        # facts. This is the durable "Memory" layer; below, it also lets us skip
+        # the lossy full-history summary because the record already carries the
+        # older context.
+        use_memory = False
+        try:
+            if settings.USE_STRUCTURED_MEMORY:
+                from app import lead_memory as _lm
+                mem_block = _lm.format_memory_block(session.get("lead_memory"))
+                if mem_block:
+                    messages.append({"role": "system", "content": mem_block})
+                    use_memory = True
+        except Exception as e:
+            logger.error("[LLM] lead_memory injection failed: %s", e)
+
         # 4. Sliding Window & Summarization (V8)
         full_history = session.get("history", [])
         MAX_CONTEXT = 10
         lead_id = lead_data.get("id") or lead_data.get("lead_id") or "unknown"
 
-        if len(full_history) > MAX_CONTEXT:
+        if len(full_history) > MAX_CONTEXT and use_memory:
+            # Structured memory carries the older context — skip the lossy
+            # summary blob entirely and keep only the recent raw turns.
+            logger.info("[LLM] Using structured memory; skipping summary for %s", lead_id)
+            recent_context = full_history[-MAX_CONTEXT:]
+        elif len(full_history) > MAX_CONTEXT:
             logger.info(f"[LLM] 💨 History > {MAX_CONTEXT}. Summarizing older turns for {lead_id}...")
             
             # Check for cached summary
