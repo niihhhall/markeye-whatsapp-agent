@@ -17,9 +17,13 @@ class SmartLLMRouter:
 
         # ── Fireworks AI (only provider) ──────────────────────────────────
         if settings.FIREWORKS_API_KEY:
+            # max_retries=0: don't let the SDK silently retry the SAME slow model
+            # (that stacked one call to 77s in prod). On failure we fail over to
+            # the next model in the chain instead, which is the point of having one.
             fw_client = AsyncOpenAI(
                 api_key=settings.FIREWORKS_API_KEY,
                 base_url=settings.FIREWORKS_BASE_URL,
+                max_retries=0,
             )
             self.providers.append({
                 "name": "Fireworks-Primary",

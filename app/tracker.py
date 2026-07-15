@@ -94,14 +94,21 @@ class MarkTracker:
             logger.error(f"[Markeye Tracker Error] get_all_leads: {e}")
             return []
 
-    async def update_signal_score(self, lead_id: str, score: int) -> None:
-        """Call whenever Mark recalculated lead quality. Score: 0–10."""
+    async def update_signal_score(self, lead_id: str, score) -> None:
+        """Call whenever Mark recalculated lead quality. Score: 0-10.
+        The BANT model can return a float (e.g. 1.5); the DB column is an
+        integer, so round + clamp before writing to avoid a 22P02 error."""
         if not lead_id or lead_id == "unknown":
             return
         try:
+            try:
+                score_int = int(round(float(score)))
+            except (TypeError, ValueError):
+                score_int = 0
+            score_int = max(0, min(10, score_int))
             client = await supabase_client.get_client()
             await client.table("leads").update({
-                "signal_score": max(0, min(10, score)),
+                "signal_score": score_int,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", lead_id).execute()
         except Exception as e:
