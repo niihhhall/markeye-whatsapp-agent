@@ -311,7 +311,7 @@ async def generate_response_node(state: GraphState) -> dict:
     # Build context and call LLM
     from app.graph_utils import build_enhanced_context
     messages = await build_enhanced_context(
-        session, lead_data, message, knowledge_context, client_config=client_config
+        session, lead_data, message, knowledge_context, client_config=client_config, phone=phone
     )
 
     response_text = await llm_client.call_llm(

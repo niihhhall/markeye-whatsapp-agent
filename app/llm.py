@@ -172,7 +172,8 @@ class LLMClient:
         lead_data: Dict[str, Any], 
         message: str, 
         knowledge_context: str = "",
-        client_config: Optional[dict] = None
+        client_config: Optional[dict] = None,
+        phone: str = ""
     ) -> List[Dict[str, str]]:
         """Builds the full LLM context using client_prompt or V4 system prompt."""
         # Prompt source (ADR 0001 Phase 2). Preference order:
@@ -361,9 +362,10 @@ class LLMClient:
         # older context.
         use_memory = False
         try:
-            if settings.USE_STRUCTURED_MEMORY:
+            if settings.USE_STRUCTURED_MEMORY and phone:
                 from app import lead_memory as _lm
-                mem_block = _lm.format_memory_block(session.get("lead_memory"))
+                mem = await redis_client.get_lead_memory(phone)
+                mem_block = _lm.format_memory_block(mem)
                 if mem_block:
                     messages.append({"role": "system", "content": mem_block})
                     use_memory = True

@@ -40,6 +40,22 @@ class RedisClient:
         except Exception as e:
             logger.error(f"[Redis] ERROR: save_session failed for {phone}: {e}")
 
+    async def get_lead_memory(self, phone: str) -> Optional[Dict[str, Any]]:
+        """ADR 0003: structured lead_memory lives in its OWN key so concurrent
+        session writers (BANT, persist) can't clobber it via read-modify-write."""
+        try:
+            data = await self.redis.get(f"lead_memory:{phone}")
+            return json.loads(data) if data else None
+        except Exception as e:
+            logger.error(f"[Redis] get_lead_memory failed for {phone}: {e}")
+            return None
+
+    async def save_lead_memory(self, phone: str, memory: Dict[str, Any]):
+        try:
+            await self.redis.set(f"lead_memory:{phone}", json.dumps(memory), ex=604800)
+        except Exception as e:
+            logger.error(f"[Redis] save_lead_memory failed for {phone}: {e}")
+
     async def add_to_history(self, phone: str, role: str, content: str):
         try:
             session = await self.get_session(phone)

@@ -254,7 +254,7 @@ async def debug_lead_memory(phone: str):
 
     from app.lead_memory import format_memory_block, is_empty
 
-    memory = session.get("lead_memory")
+    memory = await redis_client.get_lead_memory(normalized)
     history = session.get("history", [])
     return {
         "phone": normalized,

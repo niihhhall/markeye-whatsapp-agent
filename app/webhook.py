@@ -356,6 +356,7 @@ async def admin_reset_session(request: Request):
         await redis_client.redis.delete(f"buffer:{phone}")
         await redis_client.redis.delete(f"buffer_batch:{phone}")
         await redis_client.redis.delete(f"generating:{phone}")
+        await redis_client.redis.delete(f"lead_memory:{phone}")
         return {"status": "ok"}
     except: return {"status": "error"}
 

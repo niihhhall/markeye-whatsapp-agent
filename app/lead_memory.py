@@ -176,15 +176,14 @@ async def distill_and_update(
         return
 
     try:
-        session = await redis_client.get_session(phone)
-        if not session:
-            return
-
-        existing = session.get("lead_memory") or default_memory()
+        # lead_memory has its OWN Redis key — never stored inside the session
+        # blob — so the concurrent BANT/persist session writers can't clobber it.
+        existing = await redis_client.get_lead_memory(phone) or default_memory()
 
         # Seed known lead_data (name/company/industry) so memory is never blank
-        # even before the first distill returns.
-        lead_data = session.get("lead_data", {}) or {}
+        # even before the first distill returns. Session is read-only here.
+        session = await redis_client.get_session(phone)
+        lead_data = (session or {}).get("lead_data", {}) or {}
         seed = {
             "name": lead_data.get("name") or lead_data.get("first_name") or "",
             "company": lead_data.get("company") or "",
@@ -204,19 +203,14 @@ async def distill_and_update(
         raw = await llm_client.call_llm(
             messages,
             lead_id=lead_data.get("id", "unknown"),
-            conversation_state=session.get("state", "opening"),
+            conversation_state=(session or {}).get("state", "opening"),
             phone=phone,
             response_format={"type": "json_object"},
         )
         delta = json.loads(raw)
 
         merged = merge_memory(existing, delta)
-
-        # Re-read to avoid clobbering a concurrent write, then persist.
-        fresh = await redis_client.get_session(phone)
-        if fresh:
-            fresh["lead_memory"] = merged
-            await redis_client.save_session(phone, fresh)
+        await redis_client.save_lead_memory(phone, merged)
         logger.info("[LeadMemory] Updated memory for %s", phone)
 
     except Exception as e:

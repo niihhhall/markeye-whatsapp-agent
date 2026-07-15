@@ -45,7 +45,7 @@ async def check_and_send_calendly(phone: str, text: str, session: dict, client_c
             logger.info("[GraphUtils] Tracking booking link sent to %s", phone)
     return text
 
-async def build_enhanced_context(session: dict, lead_data: dict, message: str, knowledge_context: str = "", client_config: dict = None) -> list:
+async def build_enhanced_context(session: dict, lead_data: dict, message: str, knowledge_context: str = "", client_config: dict = None, phone: str = "") -> list:
     """Builds enhanced LLM context with BANT, Form data and Knowledge base context."""
     msg_low = message.lower()
     booking_keywords = ["booked", "done", "scheduled", "appointment", "calendar", "confirm"]
@@ -67,7 +67,7 @@ async def build_enhanced_context(session: dict, lead_data: dict, message: str, k
                 except:
                     latest_booking_info = f"Latest booking: {created_at_str}"
 
-    messages = await llm_client.build_context(session, lead_data, message, knowledge_context, client_config=client_config)
+    messages = await llm_client.build_context(session, lead_data, message, knowledge_context, client_config=client_config, phone=phone)
     
     # Qualification signaling
     bant_scores = session.get("bant_scores", {})
