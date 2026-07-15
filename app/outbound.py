@@ -221,3 +221,32 @@ async def trigger_follow_up(payload: dict = Body(...)):
         
     asyncio.create_task(send_follow_up_message(lead_id, name, phone))
     return {"status": "follow_up_scheduled"}
+
+
+@router.get("/debug/memory/{phone}", dependencies=[Depends(verify_outbound_api_key)])
+async def debug_lead_memory(phone: str):
+    """Read-only inspector for the structured lead_memory (ADR 0003 Phase 3).
+
+    Auth: same X-API-Key header as the other outbound admin endpoints.
+    Accepts a raw phone (any format); it's normalized to the internal
+    'whatsapp:+digits' session key. Returns the stored memory record plus a few
+    session fields so you can verify the distill step is landing facts.
+    """
+    normalized = normalize_phone(phone)
+    session = await redis_client.get_session(normalized)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"No session for {normalized}")
+
+    from app.lead_memory import format_memory_block, is_empty
+
+    memory = session.get("lead_memory")
+    return {
+        "phone": normalized,
+        "structured_memory_enabled": settings.USE_STRUCTURED_MEMORY,
+        "state": session.get("state"),
+        "turn_count": session.get("turn_count", 0),
+        "history_len": len(session.get("history", [])),
+        "lead_memory": memory,
+        "lead_memory_empty": is_empty(memory),
+        "lead_memory_rendered": format_memory_block(memory),
+    }
