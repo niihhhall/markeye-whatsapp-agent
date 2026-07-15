@@ -238,6 +238,36 @@ async def require_configured_api_key(x_api_key: str = Header(default="")):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
+@router.get("/debug/prompt-source", dependencies=[Depends(require_configured_api_key)])
+async def debug_prompt_source():
+    """Reports which system-prompt source build_context would use right now:
+    layered assembler vs DB monolith vs bundled file. Resolves 'is Mark on the
+    new prompt or the old one' without needing log access."""
+    from app import context_assembler as ca
+
+    layered_flag = settings.USE_LAYERED_CONTEXT
+    layers_ok = ca.layers_available()
+    active = "db_monolith_or_file"
+    assembled_len = 0
+    if layered_flag and layers_ok:
+        active = "layered"
+        try:
+            assembled_len = len(ca.assemble_full_prompt("hello", include_knowledge=False))
+        except Exception as e:
+            active = f"layered_error: {e}"
+
+    return {
+        "USE_LAYERED_CONTEXT": layered_flag,
+        "layers_available": layers_ok,
+        "active_prompt_source": active,
+        "layered_assembled_chars": assembled_len,
+        "USE_STRUCTURED_MEMORY": settings.USE_STRUCTURED_MEMORY,
+        "USE_PINECONE_GROUNDING": settings.USE_PINECONE_GROUNDING,
+        "ENABLE_CLAIM_FILTER": settings.ENABLE_CLAIM_FILTER,
+        "MAX_CONTEXT_MESSAGES": settings.MAX_CONTEXT_MESSAGES,
+    }
+
+
 @router.get("/debug/memory/{phone}", dependencies=[Depends(require_configured_api_key)])
 async def debug_lead_memory(phone: str):
     """Read-only inspector for the structured lead_memory (ADR 0003 Phase 3).
