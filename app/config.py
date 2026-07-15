@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     # enable/revert with no redeploy.
     USE_STRUCTURED_MEMORY: bool = False
 
+    # How many recent raw messages to send to the LLM per reply. Older turns are
+    # covered by lead_memory (when enabled) or the rolling summary. Higher = richer
+    # recent context but more tokens/latency per reply. Tune via Heroku config vars.
+    MAX_CONTEXT_MESSAGES: int = 35
+
     # Fireworks AI (Primary chain: primary -> secondary -> fallback)
     FIREWORKS_API_KEY: str = ""
     FIREWORKS_BASE_URL: str = "https://api.fireworks.ai/inference/v1"

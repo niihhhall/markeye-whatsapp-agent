@@ -374,7 +374,7 @@ class LLMClient:
 
         # 4. Sliding Window & Summarization (V8)
         full_history = session.get("history", [])
-        MAX_CONTEXT = 10
+        MAX_CONTEXT = settings.MAX_CONTEXT_MESSAGES
         lead_id = lead_data.get("id") or lead_data.get("lead_id") or "unknown"
 
         if len(full_history) > MAX_CONTEXT and use_memory:

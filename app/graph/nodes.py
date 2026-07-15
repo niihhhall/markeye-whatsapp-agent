@@ -462,10 +462,13 @@ async def persist_session_node(state: GraphState) -> dict:
     client_config = state.get("client_config")
     tracker = MarkTracker()
 
-    # Update history
+    # Update history. Keep headroom above the LLM context window so a large
+    # MAX_CONTEXT_MESSAGES is never silently starved by the storage cap.
+    from app.config import settings as _hist_settings
+    _hist_cap = max(50, _hist_settings.MAX_CONTEXT_MESSAGES + 15)
     session["history"].append({"role": "user", "content": message})
     session["history"].append({"role": "assistant", "content": response_text})
-    session["history"] = session["history"][-50:]
+    session["history"] = session["history"][-_hist_cap:]
     session["turn_count"] = session.get("turn_count", 0) + 1
     session["last_updated"] = datetime.now(timezone.utc).isoformat()
 
