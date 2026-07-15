@@ -138,7 +138,7 @@ class Settings(BaseSettings):
     OPENWA_WEBHOOK_URL: str = "http://fastapi:8000/webhook/openwa"
 
     SALES_PHONE_NUMBER: str = ""
-    PRICING_PDF_URL: str = "https://markeye.io/pricing-overview.pdf"
+    PRICING_PDF_URL: str = "https://markeye.space/pricing-overview.pdf"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

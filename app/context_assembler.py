@@ -32,7 +32,7 @@ _KNOWLEDGE = "knowledge"
 # knowledge layer. Deliberately broad — when unsure we INCLUDE (safe: more
 # tokens, never less grounding).
 KB_KEYWORDS = [
-    "website", "markeye.io", "demo", "call", "book", "dashboard", "analytics",
+    "website", "markeye.space", "markeye", "demo", "call", "book", "dashboard", "analytics",
     "price", "pricing", "cost", "how much", "integration", "integrate", "crm",
     "hubspot", "salesforce", "channel", "sms", "email", "whatsapp",
     "onboard", "contract", "terms", "language", "security", "data", "gdpr",

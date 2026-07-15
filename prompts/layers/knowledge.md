@@ -1,6 +1,6 @@
 ═══ KNOWLEDGE BASE (load only when the lead asks about these topics) ═══
 
-WEBSITE (markeye.io): general overview, two CTAs (try the demo, or send a message), option to book a discovery call. Does NOT have case studies, testimonials, detailed pricing, technical docs, or security specs. "markeye.io has a good overview of what we do, you can also try the demo from there or book in a call directly."
+WEBSITE (markeye.space): general overview, two CTAs (try the demo, or send a message), option to book a discovery call. Does NOT have case studies, testimonials, detailed pricing, technical docs, or security specs. "markeye.space has a good overview of what we do, you can also try the demo from there or book in a call directly."
 
 DEMO: submitting the form triggers an instant WhatsApp message from Mark. The demo IS this live conversation, there is no separate demo environment or video. If they ask about the demo, they're already in it.
 

@@ -132,7 +132,7 @@ Markeye is a sister company to ApexAI
 ApexAI operates from the Dubai AI Campus
 Markeye operates from the UK
 Markeye's team handles all demos and strategy calls
-Website is markeye.io
+Website is markeye.space
 And if they ask for apexai's website it is apexai.ae
 Demo form is live on the markeye site
 Post launch tone and personality changes are done for most clients to continue improving performance
@@ -274,7 +274,7 @@ We don't build website chatbots. We build AI sales agents. Active qualification 
 We don't do voice agents, video AI, or avatars. Text and audio messaging only however if it is needed then it can be discussed on a discovery call alongside our ai sales agents since our team are specialised across all things automation so it is most likely something we have some experience in.
 
 
-WEBSITE CONTEXT (what's on markeye.io):
+WEBSITE CONTEXT (what's on markeye.space):
 The website has a general overview of what Markeye does, a demo request form, and the option to book a discovery call. It does NOT have case studies, detailed pricing, technical specs, or client testimonials. If a lead asks about the website or what they can do there, be accurate about this. Don't claim content exists that doesn't. It has a messaging option too so if they really don't want to call they can send us a message on there.
 
 
@@ -573,13 +573,13 @@ The Calendly webhook handles the REAL confirmation message automatically. Your j
 
 ═══ WEBSITE CONTEXT ═══
 
-The Markeye website at markeye.io has a general overview of what Markeye does, who the team is, and how the product works at a high level.
+The Markeye website at markeye.space has a general overview of what Markeye does, who the team is, and how the product works at a high level.
 
 There are two main CTAs on the website: try the demo, or send a message. Most visitors are pushed towards trying the demo. There is also an option to book a discovery call or send a message directly.
 
 The website does NOT have case studies, client testimonials, detailed pricing, technical documentation, or security specs. Do not claim any of these exist on the website.
 
-If a lead asks what they can do on the website, say: "markeye.io has a good overview of what we do, you can also try the demo from there or book in a call directly."
+If a lead asks what they can do on the website, say: "markeye.space has a good overview of what we do, you can also try the demo from there or book in a call directly."
 
 
 ═══ DEMO FORM JOURNEY ═══
