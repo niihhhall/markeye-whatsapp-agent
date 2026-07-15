@@ -98,3 +98,18 @@ def test_seed_then_distill_flow_preserves_everything():
     assert final["company"] == "Markeye"
     assert final["pains"] == ["missing after-hours leads"]
     assert final["booking_status"] == "interested"
+
+
+def test_sanitize_lead_name_blocks_agent_name():
+    # The agent's own name must never be recorded as the lead's name.
+    assert lm.sanitize_lead_name("Mark") == ""
+    assert lm.sanitize_lead_name("markeye") == ""
+    assert lm.sanitize_lead_name("  MARK  ") == ""
+    assert lm.sanitize_lead_name("bot") == ""
+
+
+def test_sanitize_lead_name_allows_real_names():
+    assert lm.sanitize_lead_name("Nihal") == "Nihal"
+    assert lm.sanitize_lead_name("Sarah") == "Sarah"
+    assert lm.sanitize_lead_name("") == ""
+    assert lm.sanitize_lead_name(None) == ""

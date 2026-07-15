@@ -93,6 +93,15 @@ def merge_memory(existing: Optional[Dict[str, Any]], new: Optional[Dict[str, Any
     return merged
 
 
+def sanitize_lead_name(name: Any) -> str:
+    """Drop the agent's own name if a distill wrongly returns it as the lead's
+    name. Returns '' for blocked names, else the cleaned name."""
+    n = _clean_str(name)
+    if n.lower() in _AGENT_NAME_BLOCKLIST:
+        return ""
+    return n
+
+
 def is_empty(mem: Optional[Dict[str, Any]]) -> bool:
     if not mem:
         return True
@@ -138,8 +147,15 @@ def format_memory_block(mem: Optional[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+# The AI agent is named "Mark" / "Markeye". Its name must NEVER be recorded as
+# the lead's name. Deterministic guard below backs up the prompt instruction.
+_AGENT_NAME_BLOCKLIST = {"mark", "markeye", "mark ai", "markeye ai", "assistant", "ai", "bot"}
+
 _DISTILL_PROMPT = (
-    "You extract structured sales memory from a WhatsApp conversation turn.\n"
+    "You extract structured sales memory from ONE WhatsApp conversation turn.\n"
+    "The turn has two speakers:\n"
+    "  LEAD  = the prospect (the customer). Extract facts about THEM.\n"
+    "  AGENT = the AI sales rep, named Mark, from Markeye. This is NOT the lead.\n"
     "Return ONLY a JSON object with these keys (omit a key or use \"\" / [] if unknown):\n"
     '{\n'
     '  "name": "", "company": "", "industry": "",\n'
@@ -148,13 +164,18 @@ _DISTILL_PROMPT = (
     '  "pains": [], "objections_raised": [], "commitments": [], "notes": ""\n'
     '}\n'
     "Rules:\n"
-    "- Only record facts actually stated by the lead. Never invent.\n"
-    "- pains: the lead's problems in their own short words.\n"
-    "- objections_raised: concerns about price, timing, trust, AI, etc.\n"
-    "- commitments: things the lead agreed to (e.g. 'will send details', 'agreed to a call').\n"
+    "- Record ONLY facts about the LEAD, actually stated in the turn. Never invent.\n"
+    "- name: the LEAD's own name, only if THE LEAD states it about themselves. "
+    "NEVER use 'Mark', 'Markeye', or the agent/assistant as the name. If unsure, leave \"\".\n"
+    "- company / industry: the lead's business and sector.\n"
+    "- volume: any lead/enquiry counts the lead mentions (e.g. '200 leads a month').\n"
+    "- pains: the lead's problems in their own short words (e.g. 'leads go cold overnight'). "
+    "ALWAYS put stated problems here, not only in notes.\n"
+    "- objections_raised: lead concerns about price, timing, trust, AI, etc.\n"
+    "- commitments: things the LEAD agreed to (e.g. 'agreed to a call', 'will send details').\n"
     "- booking_status: one of not_discussed | interested | agreed | booked | declined.\n"
     "- ai_attitude: short phrase e.g. 'skeptical', 'curious', 'enthusiastic'.\n"
-    "- Extract ONLY new/updated facts from the latest turn; prior facts are already stored.\n"
+    "- Extract ONLY new/updated facts from this turn; prior facts are already stored.\n"
 )
 
 
@@ -193,7 +214,7 @@ async def distill_and_update(
 
         turn_text = f"LEAD: {message}"
         if response_text:
-            turn_text += f"\nMARK: {response_text}"
+            turn_text += f"\nAGENT (Mark, the AI rep, NOT the lead): {response_text}"
 
         messages = [
             {"role": "system", "content": _DISTILL_PROMPT},
@@ -208,6 +229,10 @@ async def distill_and_update(
             response_format={"type": "json_object"},
         )
         delta = json.loads(raw)
+
+        # Deterministic guard: the agent's own name must never be stored as the
+        # lead's name (backs up the prompt rule; distills sometimes ignore it).
+        delta["name"] = sanitize_lead_name(delta.get("name"))
 
         merged = merge_memory(existing, delta)
         await redis_client.save_lead_memory(phone, merged)
