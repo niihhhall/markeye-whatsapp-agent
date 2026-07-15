@@ -223,11 +223,26 @@ async def trigger_follow_up(payload: dict = Body(...)):
     return {"status": "follow_up_scheduled"}
 
 
-@router.get("/debug/memory/{phone}", dependencies=[Depends(verify_outbound_api_key)])
+async def require_configured_api_key(x_api_key: str = Header(default="")):
+    """Fail-closed guard for read endpoints that expose PII. Unlike
+    verify_outbound_api_key (which is a no-op when no key is configured), this
+    REFUSES to serve unless OUTBOUND_API_KEY is both set and matched — so a
+    debug/inspection endpoint can never leak conversation data on a
+    misconfigured deploy."""
+    if not settings.OUTBOUND_API_KEY:
+        raise HTTPException(
+            status_code=403,
+            detail="OUTBOUND_API_KEY not configured; debug endpoint disabled",
+        )
+    if x_api_key != settings.OUTBOUND_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+
+@router.get("/debug/memory/{phone}", dependencies=[Depends(require_configured_api_key)])
 async def debug_lead_memory(phone: str):
     """Read-only inspector for the structured lead_memory (ADR 0003 Phase 3).
 
-    Auth: same X-API-Key header as the other outbound admin endpoints.
+    Auth: X-API-Key header, fail-closed (see require_configured_api_key).
     Accepts a raw phone (any format); it's normalized to the internal
     'whatsapp:+digits' session key. Returns the stored memory record plus a few
     session fields so you can verify the distill step is landing facts.
