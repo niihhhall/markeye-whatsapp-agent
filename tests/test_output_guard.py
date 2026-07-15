@@ -97,3 +97,48 @@ def test_helpers_directly():
     assert find_banned_phrases("great question mate") == ["great question"]
     assert find_dashes("a — b") != []
     assert find_banned_claims("data is stored in the uk") == ["stored in the uk"]
+
+
+# ─── ADR 0004 B2 — deterministic banned-claims filter ───────────────────────────
+from app.output_guard import redact_banned_claims, guard_outgoing, SAFE_DEFLECTION
+
+
+def test_redact_strips_offending_sentence_keeps_rest():
+    text = "Happy to help with that. We have loads of case studies I can share. What's your setup like?"
+    cleaned, hits = redact_banned_claims(text)
+    assert hits  # a banned claim was detected
+    assert "case studies" not in cleaned.lower()
+    # The clean sentences survive.
+    assert "Happy to help with that." in cleaned
+    assert "What's your setup like?" in cleaned
+
+
+def test_redact_deflects_when_whole_message_is_a_claim():
+    text = "We have current clients in your area."
+    cleaned, hits = redact_banned_claims(text)
+    assert hits
+    assert cleaned == SAFE_DEFLECTION
+
+
+def test_redact_noop_when_clean():
+    text = "Sounds good, what's the main bottleneck right now?"
+    cleaned, hits = redact_banned_claims(text)
+    assert hits == []
+    assert cleaned == text
+
+
+def test_guard_outgoing_composes_sanitize_and_claims():
+    # Contains an em dash (sanitize) AND a banned claim (redact).
+    text = "We've been building since 2022 — trust me. So, what's your volume like?"
+    out = guard_outgoing(text, "whatsapp:+910000000000")
+    assert "\u2014" not in out                 # dash sanitized
+    assert "building since 2022" not in out.lower()  # claim removed
+    assert "volume" in out                      # legit content kept
+
+
+def test_guard_outgoing_safe_deflection_has_no_banned_output():
+    # The deflection itself must be clean (no dashes, emojis, or banned claims).
+    assert redact_banned_claims("We have client references available.")[0] == SAFE_DEFLECTION
+    assert find_dashes(SAFE_DEFLECTION) == []
+    assert find_emojis(SAFE_DEFLECTION) == []
+    assert find_banned_claims(SAFE_DEFLECTION) == []

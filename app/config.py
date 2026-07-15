@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     # recent context but more tokens/latency per reply. Tune via Heroku config vars.
     MAX_CONTEXT_MESSAGES: int = 35
 
+    # Deterministic banned-claims output filter (ADR 0004 Workstream B2). When true,
+    # any outgoing message asserting a banned claim has that sentence stripped (or
+    # is deflected to the call). Safe default on; set false in Heroku to disable if
+    # it ever over-triggers.
+    ENABLE_CLAIM_FILTER: bool = True
+
     # Fireworks AI (Primary chain: primary -> secondary -> fallback)
     FIREWORKS_API_KEY: str = ""
     FIREWORKS_BASE_URL: str = "https://api.fireworks.ai/inference/v1"
@@ -78,8 +84,14 @@ class Settings(BaseSettings):
         return self.CALCOM_LINK or self.CALENDLY_LINK
 
     # Security (Fix 1)
-    ALLOWED_ORIGINS: str = "http://localhost:3000"  # comma-separated list in .env
+    # Comma-separated CORS origins. Defaults cover local dev for the mark-agent-front
+    # frontend (Vite dev server on 5173, plus 3000). Override in .env for production.
+    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173"
     OUTBOUND_API_KEY: str = ""
+
+    # Optional explicit path to the built frontend (mark-agent-front) SPA.
+    # When empty, main.py auto-resolves from a list of candidate locations.
+    FRONTEND_DIST_PATH: str = ""
 
     # App
     DEBUG: bool = False

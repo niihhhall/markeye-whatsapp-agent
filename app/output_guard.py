@@ -68,6 +68,15 @@ BANNED_CLAIMS = [
 ]
 
 
+# ─── Safe deflection used when a banned claim is stripped (ADR 0004 B2) ─────────
+# Style-compliant: no em dash, no emoji, casual, single sentence.
+SAFE_DEFLECTION = "that's a good one to go through properly on a quick call with the team"
+
+# Split on sentence boundaries so we can redact only the offending sentence,
+# not the whole reply.
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+
+
 def sanitize_outgoing(text: str) -> str:
     """Apply SAFE transforms to an outgoing message (dashes → commas, strip emojis).
     Only removes/replaces bot-tell characters; never rewrites meaning."""
@@ -79,6 +88,59 @@ def sanitize_outgoing(text: str) -> str:
     # Collapse any double spaces introduced by emoji removal.
     text = re.sub(r" {2,}", " ", text)
     return text
+
+
+def redact_banned_claims(text: str) -> tuple[str, List[str]]:
+    """ADR 0004 Workstream B2 — deterministic anti-hallucination.
+
+    If the reply asserts any banned claim (fake case studies, unapproved
+    pricing, security promises we can't back, etc.), drop the offending
+    sentence(s). If that empties the reply, substitute a safe deflection that
+    pushes the topic to the call. Returns (cleaned_text, hits).
+
+    A false claim leaving the system is worse than an awkward deflection, so
+    this errs on the side of removal. The banned list is curated with the
+    founder (see BANNED_CLAIMS)."""
+    if not text:
+        return text, []
+    hits = find_banned_claims(text)
+    if not hits:
+        return text, []
+
+    sentences = _SENTENCE_SPLIT.split(text)
+    kept = [s for s in sentences if not any(c in s.lower() for c in BANNED_CLAIMS)]
+    cleaned = " ".join(kept).strip()
+    cleaned = re.sub(r" {2,}", " ", cleaned)
+
+    # If stripping left nothing meaningful, deflect to the call.
+    if len(cleaned) < 10:
+        cleaned = SAFE_DEFLECTION
+    return cleaned, hits
+
+
+def guard_outgoing(text: str, phone: str = "") -> str:
+    """Single production entry point: SAFE transforms + banned-claim enforcement.
+    Logs any claim redaction. Returns the message that is safe to send."""
+    if not text:
+        return text
+    text = sanitize_outgoing(text)
+    if settings_claim_filter_enabled():
+        cleaned, hits = redact_banned_claims(text)
+        if hits:
+            logger.warning(
+                "[OutputGuard] Redacted banned claim(s) for %s: %s", phone or "?", hits
+            )
+        text = cleaned
+    return text
+
+
+def settings_claim_filter_enabled() -> bool:
+    """Read the flag lazily so tests/imports don't hard-depend on config."""
+    try:
+        from app.config import settings
+        return bool(getattr(settings, "ENABLE_CLAIM_FILTER", True))
+    except Exception:
+        return True
 
 
 def find_dashes(text: str) -> List[str]:

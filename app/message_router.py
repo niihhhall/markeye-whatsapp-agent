@@ -66,7 +66,7 @@ async def send_message(
     text: str,
     client_config: Optional[dict] = None,
 ) -> dict | None:
-    text = output_guard.sanitize_outgoing(text)
+    text = output_guard.guard_outgoing(text, phone)
     output_guard.log_violations(phone, text)
     provider = get_provider(client_config)
     client_id = client_config.get("id") if client_config else None
