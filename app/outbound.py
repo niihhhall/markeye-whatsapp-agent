@@ -255,12 +255,17 @@ async def debug_lead_memory(phone: str):
     from app.lead_memory import format_memory_block, is_empty
 
     memory = session.get("lead_memory")
+    history = session.get("history", [])
     return {
         "phone": normalized,
         "structured_memory_enabled": settings.USE_STRUCTURED_MEMORY,
         "state": session.get("state"),
         "turn_count": session.get("turn_count", 0),
-        "history_len": len(session.get("history", [])),
+        "history_len": len(history),
+        "history": [
+            {"role": m.get("role"), "content": (m.get("content") or "")[:200]}
+            for m in history[-16:]
+        ],
         "lead_memory": memory,
         "lead_memory_empty": is_empty(memory),
         "lead_memory_rendered": format_memory_block(memory),
