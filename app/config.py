@@ -50,6 +50,16 @@ class Settings(BaseSettings):
     # it ever over-triggers.
     ENABLE_CLAIM_FILTER: bool = True
 
+    # Pinecone grounding (ADR 0004 Workstream A / Option B). Integrated embeddings
+    # (llama-text-embed-v2) — no OpenAI. When on, retrieve_knowledge queries
+    # Pinecone; on any error it falls back to the static knowledge.md layer.
+    # Set PINECONE_API_KEY in Heroku config vars, then flip the flag on.
+    PINECONE_API_KEY: str = ""
+    PINECONE_INDEX_NAME: str = "markeye-knowledge"
+    PINECONE_NAMESPACE: str = "kb"
+    PINECONE_EMBED_MODEL: str = "llama-text-embed-v2"
+    USE_PINECONE_GROUNDING: bool = False
+
     # Fireworks AI (Primary chain: primary -> secondary -> fallback)
     FIREWORKS_API_KEY: str = ""
     FIREWORKS_BASE_URL: str = "https://api.fireworks.ai/inference/v1"

@@ -1,6 +1,6 @@
 # ADR 0004 — Grounding (Retrieval) + Deterministic Hallucination Filter
 
-- **Status:** Proposed (recommends Option B for grounding + ship the output filter in parallel)
+- **Status:** Accepted (Option B + B2). B2 shipped live; grounding shipped behind USE_PINECONE_GROUNDING (default off). See Implementation section.
 - **Date:** 2026-07-15
 - **Owner:** Engineering (CTO advisory)
 - **Deciders:** Founder, Engineering
@@ -142,3 +142,25 @@ Rationale: B uses the earmarked account, needs no OpenAI, and is the least code 
 - Per-conversation memory (done in ADR 0003).
 - Cross-conversation / long-term lead memory (future; could reuse the same vector store).
 - Replacing the LLM provider or the LangGraph harness.
+
+
+---
+
+## Implementation (shipped)
+
+**Workstream B2 — banned-claims output filter (LIVE):**
+- `app/output_guard.py` — `redact_banned_claims()` (drops the offending sentence, deflects to the call if that empties the reply) + `guard_outgoing()` (sanitize + claim enforcement, single production entry point). `SAFE_DEFLECTION` is style-compliant (no dash/emoji/claim).
+- `app/message_router.py send_message` — now calls `guard_outgoing()` instead of `sanitize_outgoing()`.
+- `app/config.py` — `ENABLE_CLAIM_FILTER: bool = True` (Heroku-flippable).
+- `tests/test_output_guard.py` — eval cases: sentence-level redaction, whole-message deflection, compose-with-sanitize, deflection is clean. All green.
+
+**Workstream A — Pinecone grounding (shipped, flag-gated OFF):**
+- `app/knowledge.py` — `retrieve_knowledge()` prefers Pinecone (integrated `llama-text-embed-v2`, no OpenAI), falls back to the legacy Supabase path, and returns "" on any error so `build_context` uses the static `knowledge.md` layer. Search call is version-tolerant across SDK generations.
+- `app/config.py` — `PINECONE_API_KEY`, `PINECONE_INDEX_NAME`, `PINECONE_NAMESPACE`, `PINECONE_EMBED_MODEL`, `USE_PINECONE_GROUNDING` (default off).
+- `requirements.txt` — `pinecone>=5.1,<7.0`.
+- `scripts/ingest_kb.py` — creates the integrated index and ingests `prompts/layers/knowledge.md` + `prompts/knowledge/*.txt` + `prompts/objections/*.txt` as chunked records.
+
+**Rollout for grounding:**
+1. Set `PINECONE_API_KEY` in Heroku config vars.
+2. Run the ingest once: `heroku run "python scripts/ingest_kb.py" -a mark-ai-sdr-agent` (or locally with the key set).
+3. Flip `USE_PINECONE_GROUNDING=true`. Revert by setting it back to `false` (falls back to `knowledge.md`).
